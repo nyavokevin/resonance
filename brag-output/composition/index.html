@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Resonance — Brag</title>
+    <script src="assets/js/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        margin: 0; width: 1920px; height: 1080px; overflow: hidden;
+        background: #1e1f22;
+      }
+      #root {
+        position: relative; width: 100%; height: 100%; overflow: hidden;
+        background: #1e1f22; color: #ffffff;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .clip { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+      .inner { display: flex; flex-direction: column; align-items: center; }
+
+      /* ---------- Scene 1 ---------- */
+      #s1-line1 { font-size: 150px; font-weight: 800; letter-spacing: -0.02em; opacity: 0; }
+      #s1-line2 { font-size: 150px; font-weight: 800; letter-spacing: -0.02em; opacity: 0; }
+      #s1-rule { width: 0px; height: 12px; background: #5865f2; border-radius: 6px; margin-top: 24px; }
+      #s1-sub { margin-top: 36px; font-size: 34px; color: #b5bac1; letter-spacing: 0.14em; opacity: 0; }
+      #s1-fade { display: flex; flex-direction: column; align-items: center; }
+
+      /* ---------- Scene 2 ---------- */
+      #s2-shell {
+        width: 1500px; background: #2b2d31; border: 1px solid #3f4147;
+        border-radius: 20px; padding: 36px 44px 30px; opacity: 0;
+      }
+      #s2-bar {
+        display: flex; align-items: center; gap: 18px; background: #1e1f22;
+        border: 1px solid #3f4147; border-radius: 14px; padding: 20px 26px;
+      }
+      #s2-dot { width: 22px; height: 22px; border-radius: 50%; background: #5865f2; }
+      #s2-url { font-size: 30px; color: #ffffff; opacity: 0; }
+      #s2-badge {
+        font-size: 22px; font-weight: 700; letter-spacing: 0.08em; color: #fff;
+        background: #1db954; border-radius: 8px; padding: 8px 16px; opacity: 0;
+      }
+      #s2-chips { display: flex; gap: 14px; margin-top: 22px; }
+      .s2-chip {
+        font-size: 24px; font-weight: 700; color: #fff; border-radius: 999px;
+        padding: 10px 24px; opacity: 0;
+      }
+      #s2-track {
+        display: flex; align-items: center; gap: 22px; margin-top: 24px;
+        background: #313338; border: 1px solid #3f4147; border-radius: 14px;
+        padding: 18px 24px; opacity: 0;
+      }
+      #s2-cover {
+        width: 86px; height: 86px; border-radius: 12px;
+        background: #5865f2; display: flex; align-items: center; justify-content: center;
+        font-size: 44px; color: #fff;
+      }
+      #s2-t { font-size: 34px; font-weight: 700; }
+      #s2-a { font-size: 26px; color: #b5bac1; margin-top: 4px; }
+      #s2-play {
+        margin-left: auto; width: 76px; height: 76px; border-radius: 50%;
+        background: #5865f2; display: flex; align-items: center; justify-content: center;
+        font-size: 32px; color: #fff;
+      }
+      #s2-player {
+        display: flex; align-items: center; gap: 20px; margin-top: 22px;
+        background: #1e1f22; border: 1px solid #3f4147; border-radius: 14px;
+        padding: 16px 24px; opacity: 0;
+      }
+      #s2-eq { display: flex; align-items: flex-end; gap: 6px; height: 44px; }
+      #s2-eq span { width: 10px; background: #23a55a; border-radius: 3px; height: 40%; }
+      #s2-seek { flex: 1; height: 8px; background: #3f4147; border-radius: 4px; position: relative; }
+      #s2-seekfill { position: absolute; left: 0; top: 0; bottom: 0; width: 35%; background: #5865f2; border-radius: 4px; }
+      #s2-cursor {
+        position: absolute; width: 34px; height: 34px; border-radius: 50%;
+        background: #ffffff; border: 4px solid #5865f2; opacity: 0;
+        left: 0; top: 0;
+      }
+
+      /* ---------- Scene 3 ---------- */
+      #s3-code {
+        font-size: 120px; font-weight: 800; letter-spacing: 0.12em; opacity: 0;
+        background: #2b2d31; border: 1px solid #3f4147; border-radius: 24px;
+        padding: 30px 70px;
+      }
+      #s3-label { margin-top: 18px; font-size: 30px; color: #b5bac1; letter-spacing: 0.2em; opacity: 0; }
+      #s3-rows { margin-top: 30px; display: flex; flex-direction: column; gap: 16px; width: 900px; }
+      .s3-row {
+        display: flex; align-items: center; gap: 18px; background: #2b2d31;
+        border: 1px solid #3f4147; border-radius: 14px; padding: 18px 26px; opacity: 0;
+      }
+      .s3-dot { width: 18px; height: 18px; border-radius: 50%; background: #23a55a; }
+      .s3-who { font-size: 30px; font-weight: 700; }
+      .s3-now { font-size: 26px; color: #b5bac1; margin-left: auto; }
+      #s3-live {
+        margin-top: 34px; font-size: 40px; font-weight: 800; letter-spacing: 0.06em;
+        background: #5865f2; border-radius: 999px; padding: 20px 70px; opacity: 0;
+      }
+      #s3-fade { display: flex; flex-direction: column; align-items: center; }
+
+      /* ---------- Scene 4 ---------- */
+      #s4-logo {
+        width: 190px; height: 190px; border-radius: 50%; background: #5865f2;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 96px; color: #fff; opacity: 0;
+      }
+      #s4-glow {
+        position: absolute; width: 420px; height: 420px; border-radius: 50%;
+        background: #5865f2; opacity: 0;
+      }
+      #s4-name { margin-top: 34px; font-size: 110px; font-weight: 800; letter-spacing: -0.02em; opacity: 0; }
+      #s4-tag { margin-top: 16px; font-size: 40px; color: #b5bac1; letter-spacing: 0.04em; opacity: 0; }
+      #s4-dots { display: flex; gap: 14px; margin-top: 34px; opacity: 0; }
+      #s4-dots span { width: 20px; height: 20px; border-radius: 50%; }
+      #s4-fade { display: flex; flex-direction: column; align-items: center; }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="20"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- Scene 1: Hook 0-3s -->
+      <section id="s1" class="clip" data-start="0" data-duration="3" data-track-index="0">
+        <div id="s1-fade" class="inner">
+          <div id="s1-line1">PASTE ANY LINK.</div>
+          <div id="s1-line2">IT JUST PLAYS.</div>
+          <div id="s1-rule"></div>
+          <div id="s1-sub">SPOTIFY &middot; YOUTUBE &middot; APPLE MUSIC &middot; SOUNDCLOUD &middot; MP3</div>
+        </div>
+      </section>
+
+      <!-- Scene 2: Reveal player 3-8s -->
+      <section id="s2" class="clip" data-start="3" data-duration="5" data-track-index="1">
+        <div id="s2-fade" class="inner" style="position: relative; width: 100%; align-items: center;">
+          <div id="s2-shell">
+            <div id="s2-bar">
+              <div id="s2-dot"></div>
+              <div id="s2-url">open.spotify.com/track/4uLU6hMCjMI75M1A2tKUQ…</div>
+              <div id="s2-badge">SPOTIFY</div>
+            </div>
+            <div id="s2-chips">
+              <div class="s2-chip" id="s2-c1" style="background: #1db954;">Spotify</div>
+              <div class="s2-chip" id="s2-c2" style="background: #ff0000;">YouTube</div>
+              <div class="s2-chip" id="s2-c3" style="background: #fa243c;">Apple</div>
+              <div class="s2-chip" id="s2-c4" style="background: #ff5500;">SoundCloud</div>
+              <div class="s2-chip" id="s2-c5" style="background: #80848e;">MP3</div>
+            </div>
+            <div id="s2-track">
+              <div id="s2-cover">&#9835;</div>
+              <div>
+                <div id="s2-t">Midnight Drive — Neon Coast</div>
+                <div id="s2-a">3:47 &middot; playing via YouTube, full track</div>
+              </div>
+              <div id="s2-play">&#9654;</div>
+            </div>
+            <div id="s2-player">
+              <div id="s2-eq"><span></span><span></span><span></span></div>
+              <div id="s2-seek"><div id="s2-seekfill"></div></div>
+              <div style="font-size: 26px; color: #b5bac1;">1:21 / 3:47</div>
+            </div>
+          </div>
+          <div id="s2-cursor"></div>
+        </div>
+      </section>
+
+      <!-- Scene 3: Jam 8-14s -->
+      <section id="s3" class="clip" data-start="8" data-duration="6" data-track-index="2">
+        <div id="s3-fade" class="inner">
+          <div id="s3-code">KX7Q2M</div>
+          <div id="s3-label">JAM CODE &middot; LISTEN TOGETHER</div>
+          <div id="s3-rows">
+            <div class="s3-row" id="s3-p1">
+              <div class="s3-dot"></div>
+              <div class="s3-who">Mara (host)</div>
+              <div class="s3-now">Midnight Drive — Neon Coast</div>
+            </div>
+            <div class="s3-row" id="s3-p2">
+              <div class="s3-dot"></div>
+              <div class="s3-who">Jonas</div>
+              <div class="s3-now">synced &middot; 0.1s drift</div>
+            </div>
+          </div>
+          <div id="s3-live">GO LIVE</div>
+        </div>
+      </section>
+
+      <!-- Scene 4: Outro 14-20s -->
+      <section id="s4" class="clip" data-start="14" data-duration="6" data-track-index="3">
+        <div id="s4-fade" class="inner" style="position: relative; align-items: center;">
+          <div id="s4-glow"></div>
+          <div id="s4-logo">&#9835;</div>
+          <div id="s4-name">Resonance</div>
+          <div id="s4-tag">one player, every link.</div>
+          <div id="s4-dots">
+            <span style="background: #1db954;"></span>
+            <span style="background: #ff0000;"></span>
+            <span style="background: #fa243c;"></span>
+            <span style="background: #ff5500;"></span>
+            <span style="background: #80848e;"></span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Audio: body-level siblings so no <audio data-start> sits inside another timed element -->
+    <audio id="bg-music" data-start="0" data-duration="20" data-track-index="10" data-volume="0.32" src="assets/music/happy-beats-business-moves-vol-12-by-ende-dot-app.mp3"></audio>
+    <audio id="sfx-type1" data-start="3.3" data-duration="0.3" data-track-index="11" data-volume="0.5" src="assets/sfx/keyboard/keypress-005.wav"></audio>
+    <audio id="sfx-type2" data-start="3.7" data-duration="0.3" data-track-index="12" data-volume="0.5" src="assets/sfx/keyboard/keypress-012.wav"></audio>
+    <audio id="sfx-chip1" data-start="3.82" data-duration="0.2" data-track-index="13" data-volume="0.6" src="assets/sfx/interface/drop_001.ogg"></audio>
+    <audio id="sfx-chip3" data-start="4.91" data-duration="0.2" data-track-index="14" data-volume="0.6" src="assets/sfx/interface/drop_002.ogg"></audio>
+    <audio id="sfx-play" data-start="6.9" data-duration="0.1" data-track-index="15" data-volume="0.7" src="assets/sfx/interface/click_003.ogg"></audio>
+    <audio id="sfx-jam" data-start="8.74" data-duration="0.2" data-track-index="16" data-volume="0.7" src="assets/sfx/impact/impactSoft_medium_001.ogg"></audio>
+    <audio id="sfx-p1" data-start="9.83" data-duration="0.6" data-track-index="17" data-volume="0.55" src="assets/sfx/casino/card-slide-1.ogg"></audio>
+    <audio id="sfx-p2" data-start="10.93" data-duration="0.6" data-track-index="18" data-volume="0.55" src="assets/sfx/casino/card-slide-1.ogg"></audio>
+    <audio id="sfx-live" data-start="13.11" data-duration="0.2" data-track-index="19" data-volume="0.65" src="assets/sfx/interface/bong_001.ogg"></audio>
+    <audio id="sfx-logo" data-start="14.6" data-duration="1.5" data-track-index="20" data-volume="0.6" src="assets/sfx/impact/impactBell_heavy_000.ogg"></audio>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      /* ---- Scene 1: Hook (0-3) ---- */
+      tl.to("#s1-line1", { opacity: 1, duration: 0.4, ease: "power2.out" }, 0.2);
+      tl.fromTo("#s1-line2", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 0.9);
+      tl.to("#s1-rule", { width: 640, duration: 0.5, ease: "power3.inOut" }, 1.0);
+      tl.to("#s1-sub", { opacity: 1, duration: 0.5, ease: "power2.out" }, 1.6);
+      tl.to("#s1-fade", { opacity: 0, duration: 0.4, ease: "power1.in" }, 2.6);
+
+      /* ---- Scene 2: Reveal (3-8) ---- */
+      tl.to("#s2-shell", { opacity: 1, duration: 0.4, ease: "power2.out" }, 3.1);
+      tl.to("#s2-url", { opacity: 1, duration: 0.4 }, 3.3);
+      tl.to("#s2-badge", { opacity: 1, duration: 0.3 }, 3.6);
+      // beat-grid: chips arrive on consecutive beats 3.82 / 4.39 / 4.91
+      tl.fromTo("#s2-c1", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 3.82);
+      tl.fromTo("#s2-c2", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 4.39);
+      tl.fromTo("#s2-c3", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.3, ease: "back.out(2)" }, 4.91);
+      tl.to("#s2-c4", { opacity: 1, duration: 0.3 }, 5.34);
+      tl.to("#s2-c5", { opacity: 1, duration: 0.3 }, 6.0);
+      tl.fromTo("#s2-track", { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: "power3.out" }, 6.2);
+      tl.to("#s2-cursor", { opacity: 1, duration: 0.2 }, 6.5);
+      tl.fromTo("#s2-cursor", { x: 200, y: 260 }, { x: 560, y: 120, duration: 0.5, ease: "power2.inOut" }, 6.5);
+      tl.fromTo("#s2-play", { scale: 1 }, { scale: 0.88, duration: 0.12, yoyo: true, repeat: 1, ease: "power2.inOut" }, 6.9);
+      tl.to("#s2-player", { opacity: 1, duration: 0.4 }, 7.0);
+      tl.to("#s2-seekfill", { width: "42%", duration: 1.0, ease: "none" }, 7.0);
+      // diegetic product equalizer (not an audio-visualizer overlay)
+      tl.fromTo("#s2-eq span:nth-child(1)", { scaleY: 0.4 }, { scaleY: 1, duration: 0.35, yoyo: true, repeat: 3, ease: "sine.inOut", transformOrigin: "bottom" }, 7.0);
+      tl.fromTo("#s2-eq span:nth-child(2)", { scaleY: 1 }, { scaleY: 0.35, duration: 0.3, yoyo: true, repeat: 3, ease: "sine.inOut", transformOrigin: "bottom" }, 7.05);
+      tl.fromTo("#s2-eq span:nth-child(3)", { scaleY: 0.6 }, { scaleY: 1, duration: 0.4, yoyo: true, repeat: 3, ease: "sine.inOut", transformOrigin: "bottom" }, 7.1);
+      tl.to("#s2-fade", { opacity: 0, duration: 0.35, ease: "power1.in" }, 7.65);
+
+      /* ---- Scene 3: Jam (8-14) ---- */
+      // beat-locked: code reveal on strong cue 8.74
+      tl.fromTo("#s3-code", { opacity: 0, scale: 0.92 }, { opacity: 1, scale: 1, duration: 0.5, ease: "power3.out" }, 8.74);
+      tl.to("#s3-label", { opacity: 1, duration: 0.4 }, 9.1);
+      tl.fromTo("#s3-p1", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 9.83);
+      tl.fromTo("#s3-p2", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, 10.93);
+      // beat-locked: Go Live payoff near strong cue 13.11 (pulse starts 12.6, bell at 13.11)
+      tl.fromTo("#s3-live", { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.45, ease: "back.out(1.6)" }, 12.4);
+      tl.to("#s3-live", { scale: 1.06, duration: 0.35, yoyo: true, repeat: 1, ease: "sine.inOut" }, 12.9);
+      tl.to("#s3-fade", { opacity: 0, duration: 0.4, ease: "power1.in" }, 13.6);
+
+      /* ---- Scene 4: Outro (14-20) ---- */
+      tl.to("#s4-glow", { opacity: 0.28, duration: 1.2, ease: "sine.inOut" }, 14.6);
+      tl.fromTo("#s4-logo", { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.6, ease: "back.out(1.4)" }, 14.6);
+      tl.to("#s4-name", { opacity: 1, duration: 0.5 }, 15.29);
+      // beat-locked: tagline on strong cue 17.47
+      tl.to("#s4-tag", { opacity: 1, duration: 0.5 }, 17.47);
+      tl.to("#s4-dots", { opacity: 1, duration: 0.4 }, 18.0);
+      // subtle timeline-driven glow breathing (deterministic; per-frame RMS extraction deferred)
+      tl.to("#s4-glow", { opacity: 0.38, duration: 0.9, yoyo: true, repeat: 3, ease: "sine.inOut" }, 15.9);
+      tl.to("#s4-fade", { opacity: 0, duration: 0.6, ease: "power1.in" }, 19.3);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
