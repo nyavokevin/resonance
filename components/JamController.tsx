@@ -11,8 +11,10 @@ import {
 } from "@/lib/jam";
 import { usePlayer } from "@/lib/player/engine";
 import { createClient } from "@/lib/supabase/client";
+import { useLocale } from "@/lib/i18n/locale-store";
 
 export function JamController() {
+  const locale = useLocale();
   const session = useJam((s) => s.session);
   const setParticipants = useJam((s) => s.setParticipants);
   const setMe = useJam((s) => s.setMe);
@@ -62,7 +64,7 @@ export function JamController() {
         .select("display_name")
         .eq("id", user.id)
         .maybeSingle();
-      const name = profile?.display_name ?? user.email ?? "Invité";
+      const name = profile?.display_name ?? user.email ?? (locale === "en" ? "Guest" : "Invité");
       setMe({ id: user.id, name });
 
       const isHost = session!.isHost;
@@ -208,7 +210,7 @@ export function JamController() {
       cleanup?.();
       if (heartbeat) clearInterval(heartbeat);
     };
-  }, [session, setParticipants, setMe]);
+  }, [session, setParticipants, setMe, locale]);
 
   return null;
 }

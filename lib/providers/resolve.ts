@@ -8,6 +8,11 @@ import { lookupByIsrc, type ITunesMatch } from "@/lib/providers/itunes";
 import { searchYouTube, type SearchResult } from "@/lib/providers/search";
 import { toYouTubeTrack as toSharedYouTubeTrack } from "@/lib/youtube-track";
 import { pickVideo, resolveTrack } from "@/lib/resolve-track";
+import {
+  DEFAULT_LOCALE,
+  dictionaries,
+  type Locale,
+} from "@/lib/i18n/dictionaries";
 
 export interface ResolveResult {
   kind: DetectedLink["kind"];
@@ -339,7 +344,11 @@ async function resolveSpotifyCollection(
   return matchCollectionItems(enumerated.items, enumerated.coverUrl);
 }
 
-async function resolveSpotify(link: DetectedLink): Promise<ResolveResult> {
+async function resolveSpotify(
+  link: DetectedLink,
+  locale: Locale
+): Promise<ResolveResult> {
+  const t = dictionaries[locale];
   const oembed = await fetchOEmbed(
     `https://open.spotify.com/oembed?url=${encodeURIComponent(link.url)}`
   );
@@ -400,18 +409,22 @@ async function resolveSpotify(link: DetectedLink): Promise<ResolveResult> {
     kind: link.kind,
     tracks: [],
     error: collectionExists
-      ? "Playlist Spotify illisible pour le moment, réessaie plus tard."
-      : "Playlist Spotify introuvable ou privée — vérifie le lien (les playlists privées ne sont pas accessibles).",
+      ? t.resolve.spotifyUnreadable
+      : t.resolve.spotifyPrivate,
   };
 }
 
-async function resolveYouTube(link: DetectedLink): Promise<ResolveResult> {
+async function resolveYouTube(
+  link: DetectedLink,
+  locale: Locale
+): Promise<ResolveResult> {
+  const t = dictionaries[locale];
   const platform = link.platform;
   if (link.kind === "playlist") {
     const oembed = await fetchOEmbed(
       `https://www.youtube.com/oembed?url=${encodeURIComponent(link.url)}&format=json`
     );
-    const title = oembed?.title ?? "Playlist YouTube";
+    const title = oembed?.title ?? t.resolve.youtubePlaylist;
     return {
       kind: "playlist",
       collectionTitle: title,
@@ -439,7 +452,7 @@ async function resolveYouTube(link: DetectedLink): Promise<ResolveResult> {
         id: `${platform}:track:${link.id}`,
         platform,
         platformTrackId: link.id,
-        title: oembed?.title ?? "Vidéo YouTube",
+        title: oembed?.title ?? t.resolve.youtubeVideo,
         artist: oembed?.author_name ?? "YouTube",
         coverUrl:
           oembed?.thumbnail_url ?? `https://i.ytimg.com/vi/${link.id}/hqdefault.jpg`,
@@ -557,13 +570,16 @@ function resolveDirect(link: DetectedLink): ResolveResult {
   };
 }
 
-export async function resolveLink(link: DetectedLink): Promise<ResolveResult> {
+export async function resolveLink(
+  link: DetectedLink,
+  locale: Locale = DEFAULT_LOCALE
+): Promise<ResolveResult> {
   switch (link.platform) {
     case "spotify":
-      return resolveSpotify(link);
+      return resolveSpotify(link, locale);
     case "youtube":
     case "youtube-music":
-      return resolveYouTube(link);
+      return resolveYouTube(link, locale);
     case "apple-music":
       return resolveAppleMusic(link);
     case "soundcloud":

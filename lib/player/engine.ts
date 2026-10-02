@@ -13,6 +13,8 @@ import { recordHistory, saveQueueState, loadQueueState, fetchRecentTrackIds } fr
 import { useToasts } from "@/lib/toast-store";
 import type { JamPlaybackState } from "@/lib/jam-store";
 import { useJam } from "@/lib/jam-store";
+import { dictionaries } from "@/lib/i18n/dictionaries";
+import { useLocaleStore } from "@/lib/i18n/locale-store";
 
 export type RepeatMode = "off" | "all" | "one" | "times";
 
@@ -265,7 +267,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         `/api/radio?videoId=${encodeURIComponent(last.platformTrackId)}&exclude=${encodeURIComponent([...exclude].join(","))}`
       );
       if (!res.ok) {
-        useToasts.getState().push("Radio indisponible", "info");
+        useToasts.getState().push(dictionaries[useLocaleStore.getState().locale].engine.radioUnavailable, "info");
         return false;
       }
       const data = await res.json();
@@ -278,10 +280,10 @@ export const usePlayer = create<PlayerState>((set, get) => {
       manualAddStreak = 0;
       persistNow();
       await loadAndPlay(get().currentIndex + 1, true);
-      useToasts.getState().push("Radio lancée — suggestions YouTube ✓", "success");
+      useToasts.getState().push(dictionaries[useLocaleStore.getState().locale].engine.radioStarted, "success");
       return true;
     } catch {
-      useToasts.getState().push("Radio indisponible", "info");
+      useToasts.getState().push(dictionaries[useLocaleStore.getState().locale].engine.radioUnavailable, "info");
       return false;
     }
   };
@@ -329,7 +331,7 @@ export const usePlayer = create<PlayerState>((set, get) => {
         originalQueue: originalQueue.map((t) => (t.id === track.id ? yt : t)),
       });
       useToasts.getState().push(
-        "Titre indisponible sur Spotify — lecture via YouTube",
+        dictionaries[useLocaleStore.getState().locale].engine.spotifyFallback,
         "info"
       );
       await loadAndPlay(currentIndex, true);

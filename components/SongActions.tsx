@@ -10,6 +10,8 @@ import { isLiked, toggleLike } from "@/lib/library";
 import type { Track } from "@/lib/types";
 import { TrackMenu, anchorFromEvent } from "@/components/TrackMenu";
 import type { PopoverAnchor } from "@/components/Popover";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt } from "@/lib/i18n/dictionaries";
 
 export function SongActions({ track }: { track: Track }) {
   const playTrack = usePlayer((s) => s.playTrack);
@@ -18,6 +20,7 @@ export function SongActions({ track }: { track: Track }) {
   const router = useRouter();
   const [liked, setLiked] = useState<boolean | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<PopoverAnchor | null>(null);
+  const t = useT();
 
   useEffect(() => {
     void isLiked(track).then(setLiked);
@@ -26,17 +29,17 @@ export function SongActions({ track }: { track: Track }) {
   async function handleLike() {
     const next = await toggleLike(track);
     if (next === null) {
-      push("Impossible d'aimer ce morceau", "error");
+      push(t.common.likeTrackImpossible, "error");
       return;
     }
     setLiked(next);
-    push(next ? "Ajouté aux titres aimés" : "Retiré des titres aimés", "success");
+    push(next ? t.common.likeAddedShort : t.common.likeRemoved, "success");
     router.refresh();
   }
 
   function handlePlay() {
     void playTrack(track, [track]).then(() => router.refresh());
-    push(`Lecture : ${track.title}`, "success");
+    push(fmt(t.search.playTitle, { title: track.title }), "success");
   }
 
   function handleAdd() {
@@ -53,7 +56,7 @@ export function SongActions({ track }: { track: Track }) {
         className={`w-10 h-10 rounded-full border border-edge bg-panel hover:bg-hover flex items-center justify-center transition-colors ${
           liked ? "text-accent" : "text-ink-soft"
         }`}
-        aria-label="Aimer"
+        aria-label={t.trackMenu.likeTrack}
       >
         <Heart size={18} fill={liked ? "currentColor" : "none"} />
       </button>
@@ -62,18 +65,18 @@ export function SongActions({ track }: { track: Track }) {
         className="px-3.5 py-2 rounded-card bg-panel hover:bg-hover border border-edge text-white text-[12px] font-medium flex items-center gap-1.5 transition-colors"
       >
         <ListPlus size={15} />
-        <span>Ajouter à la file</span>
+        <span>{t.trackMenu.addToQueue}</span>
       </button>
       <button
         onClick={handlePlay}
         className="px-5 py-2 rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold flex items-center gap-1.5 transition-colors"
       >
         <Play size={16} fill="currentColor" />
-        <span>Écouter</span>
+        <span>{t.common.listen}</span>
       </button>
       <button
         onClick={(e) => setMenuAnchor(anchorFromEvent(e))}
-        aria-label="Plus d'actions"
+        aria-label={t.player.moreActions}
         className="w-10 h-10 rounded-full border border-edge bg-panel hover:bg-hover text-ink-soft hover:text-white flex items-center justify-center transition-colors"
       >
         <MoreHorizontal size={18} />
@@ -84,7 +87,7 @@ export function SongActions({ track }: { track: Track }) {
         onClose={() => setMenuAnchor(null)}
         actions={{
           onPlay: handlePlay,
-          playLabel: "Écouter",
+          playLabel: t.common.listen,
           onPlayNext: () =>
             void smartPlayNext(track).then((result) =>
               toastQueueResult(push, result, track.title)

@@ -4,11 +4,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
 import { PlayerBar } from "@/components/PlayerBar";
+import { FloatingPlayer } from "@/components/FloatingPlayer";
+import { MiniSync } from "@/components/MiniSync";
 import { QueuePanel } from "@/components/QueuePanel";
 import { Toaster } from "@/components/Toaster";
 import { JamController } from "@/components/JamController";
 import { KeyboardShortcuts } from "@/components/PlayerControls";
 import { usePlayer } from "@/lib/player/engine";
+import { useInitLocale } from "@/lib/i18n/locale-store";
 import type { PlaylistSummaryServer } from "@/lib/library-server";
 
 interface ShellProps {
@@ -22,15 +25,20 @@ export function Shell({ user, likedCount, playlists, children }: ShellProps) {
   const queueOpen = usePlayer((s) => s.queueOpen);
   const init = usePlayer((s) => s.init);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  useInitLocale();
 
   useEffect(() => {
     init();
-    window.resonance?.onMediaKey((action) => {
+    const off = window.resonance?.onMediaKey((action) => {
+      console.log("[media-key] received:", action);
       const p = usePlayer.getState();
       if (action === "toggle") void p.toggle();
       else if (action === "next") void p.next();
       else if (action === "previous") void p.previous();
     });
+    return () => {
+      if (typeof off === "function") off();
+    };
   }, [init]);
 
   return (
@@ -54,6 +62,8 @@ export function Shell({ user, likedCount, playlists, children }: ShellProps) {
           </div>
         </div>
         {user && <PlayerBar />}
+        {user && <FloatingPlayer />}
+        {user && <MiniSync />}
         {user && <JamController />}
         <Toaster />
       </div>

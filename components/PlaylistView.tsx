@@ -50,6 +50,8 @@ import {
   type PlaylistTrackRow,
   type PlaylistDetail,
 } from "@/lib/playlists";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt, plural } from "@/lib/i18n/dictionaries";
 
 type PlaylistInitial = PlaylistDetail & { ownerId: string };
 
@@ -80,6 +82,7 @@ function PlaylistRowInner({
   onMenu: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
   const { track } = row;
+  const t = useT();
 
   return (
     <>
@@ -124,7 +127,7 @@ function PlaylistRowInner({
           e.stopPropagation();
           onToggleSelect();
         }}
-        aria-label={`Sélectionner ${track.title}`}
+        aria-label={fmt(t.playlist.selectAria, { title: track.title })}
         className={`shrink-0 rounded p-1 transition-colors ${
           selected ? "text-accent" : "text-ink-muted opacity-0 group-hover:opacity-100 hover:text-white"
         }`}
@@ -136,7 +139,7 @@ function PlaylistRowInner({
           e.stopPropagation();
           onMenu(e);
         }}
-        aria-label={`Options de ${track.title}`}
+        aria-label={fmt(t.playlist.optionsAria, { title: track.title })}
         className="shrink-0 rounded p-1 text-ink-muted opacity-0 group-hover:opacity-100 hover:text-white transition"
       >
         <MoreHorizontal size={15} />
@@ -212,6 +215,7 @@ export function PlaylistView({
 }) {
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
   const playTrack = usePlayer((s) => s.playTrack);
   const currentTrack = usePlayer((s) => s.currentTrack());
 
@@ -263,19 +267,19 @@ export function PlaylistView({
     if (!allTracks.length) return;
     const list = shuffled ? [...allTracks].sort(() => Math.random() - 0.5) : allTracks;
     await playTrack(list[0], list);
-    push(`Lecture : ${initial.name}`, "success");
+    push(fmt(t.playlist.playing, { name: initial.name }), "success");
   }
 
   async function handleAddAllToQueue() {
-    for (const t of allTracks) {
-      const result = await smartAddToQueue(t);
+    for (const tr of allTracks) {
+      const result = await smartAddToQueue(tr);
       if (result === "failed") {
-        push("Ajout impossible", "error");
+        push(t.common.addImpossible, "error");
         return;
       }
     }
     usePlayer.getState().setQueueOpen(true);
-    push(`${allTracks.length} titres ajoutés à la file ✓`, "success");
+    push(fmt(t.playlist.addedToQueue, { n: allTracks.length }), "success");
   }
 
   function handleRowClick(e: React.MouseEvent, row: PlaylistTrackRow, index: number) {
@@ -313,10 +317,10 @@ export function PlaylistView({
     const ok = await removeTracksFromPlaylist(ids);
     if (!ok) {
       setTracks(snapshot);
-      push("Suppression impossible", "error");
+      push(t.common.deleteImpossible, "error");
       return;
     }
-    push(`${ids.length} titre(s) retiré(s) ✓`, "success");
+    push(fmt(t.playlist.removedCount, { n: ids.length }), "success");
     router.refresh();
   }
 
@@ -325,12 +329,12 @@ export function PlaylistView({
     for (const r of rows) {
       const result = await smartAddToQueue(r.track);
       if (result === "failed") {
-        push("Ajout impossible", "error");
+        push(t.common.addImpossible, "error");
         return;
       }
     }
     usePlayer.getState().setQueueOpen(true);
-    push(`${rows.length} titre(s) ajouté(s) à la file ✓`, "success");
+    push(fmt(t.playlist.addedToQueueShort, { n: rows.length }), "success");
     setSelected(new Set());
   }
 
@@ -345,10 +349,10 @@ export function PlaylistView({
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     setTracks(next);
-    void reorderPlaylist(initial.id, next.map((t) => t.id)).then((ok) => {
+    void reorderPlaylist(initial.id, next.map((row) => row.id)).then((ok) => {
       if (!ok) {
         setTracks(snapshot);
-        push("Réorganisation impossible", "error");
+        push(t.playlist.reorderImpossible, "error");
         return;
       }
       router.refresh();
@@ -371,10 +375,10 @@ export function PlaylistView({
     const ok = await updatePlaylist(initial.id, { name });
     if (!ok) {
       setTitleValue(initial.name);
-      push("Renommage impossible", "error");
+      push(t.sidebar.renameImpossible, "error");
       return;
     }
-    push("Playlist renommée ✓", "success");
+    push(t.sidebar.playlistRenamed, "success");
     router.refresh();
   }
 
@@ -384,10 +388,10 @@ export function PlaylistView({
     const ok = await updatePlaylist(initial.id, { description: descValue });
     if (!ok) {
       setDescValue(initial.description);
-      push("Modification impossible", "error");
+      push(t.playlist.editImpossible, "error");
       return;
     }
-    push("Description mise à jour ✓", "success");
+    push(t.playlist.descriptionUpdated, "success");
     router.refresh();
   }
 
@@ -395,10 +399,10 @@ export function PlaylistView({
     setPageMenuAnchor(null);
     const row = await duplicatePlaylist(initial.id);
     if (!row) {
-      push("Duplication impossible", "error");
+      push(t.sidebar.duplicateImpossible, "error");
       return;
     }
-    push("Playlist dupliquée ✓", "success");
+    push(t.sidebar.playlistDuplicated, "success");
     router.refresh();
     router.push(`/playlist/${row.id}`);
   }
@@ -408,11 +412,11 @@ export function PlaylistView({
     const ok = await deletePlaylist(initial.id);
     setDeleting(false);
     if (!ok) {
-      push("Suppression impossible", "error");
+      push(t.common.deleteImpossible, "error");
       return;
     }
     setDeleteOpen(false);
-    push(`Playlist « ${initial.name} » supprimée`, "success");
+    push(fmt(t.playlist.playlistDeleted, { name: initial.name }), "success");
     router.push("/");
     router.refresh();
   }
@@ -439,11 +443,11 @@ export function PlaylistView({
         <div className="flex flex-col min-w-0 justify-end gap-1.5 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-              Playlist
+              {t.playlist.playlistLabel}
             </span>
             {share && (
               <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-accent/15 border border-accent text-accent">
-                Playlist publique
+                {t.playlist.publicPlaylist}
               </span>
             )}
           </div>
@@ -466,7 +470,7 @@ export function PlaylistView({
           ) : (
             <h1
               onClick={() => initial.isOwner && setEditingTitle(true)}
-              title={initial.isOwner ? "Cliquer pour renommer" : undefined}
+              title={initial.isOwner ? t.playlist.clickToRename : undefined}
               className={`font-display text-[26px] font-bold text-white leading-tight break-words ${
                 initial.isOwner ? "cursor-text hover:underline decoration-edge underline-offset-4" : ""
               }`}
@@ -488,7 +492,7 @@ export function PlaylistView({
                 }
               }}
               maxLength={200}
-              placeholder="Ajouter une description…"
+              placeholder={t.playlist.descriptionPlaceholder}
               className="text-[13px] text-ink-soft bg-transparent border-b border-accent outline-none w-full"
             />
           ) : (
@@ -498,13 +502,13 @@ export function PlaylistView({
                 initial.isOwner ? "cursor-text hover:underline decoration-edge underline-offset-4" : ""
               }`}
             >
-              {initial.description || (initial.isOwner ? "Ajouter une description…" : "")}
+              {initial.description || (initial.isOwner ? t.playlist.descriptionEmpty : "")}
             </p>
           )}
           <p className="text-[12px] text-ink-muted">
-            {tracks.length} titre{tracks.length > 1 ? "s" : ""}
+            {fmt(t.common.titlesCountWithSuffix, { n: tracks.length, s: plural(tracks.length) })}
             {totalMs > 0 && ` · ${formatDuration(totalMs)}`}
-            {share?.creatorName && ` · par ${share.creatorName}`}
+            {share?.creatorName && fmt(t.playlist.byCreator, { creator: share.creatorName })}
           </p>
         </div>
       </div>
@@ -516,12 +520,12 @@ export function PlaylistView({
           className="px-5 py-2 rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
         >
           <PlayIcon size={16} fill="currentColor" />
-          <span>Lecture</span>
+          <span>{t.playlist.playAction}</span>
         </button>
         <button
           onClick={() => void handlePlayAll(true)}
           disabled={!tracks.length}
-          title="Lecture aléatoire"
+          title={t.playlist.shuffleTitle}
           className="w-10 h-10 rounded-full border border-edge bg-panel hover:bg-hover text-ink-soft hover:text-white flex items-center justify-center transition-colors disabled:opacity-50"
         >
           <Shuffle size={17} />
@@ -532,7 +536,7 @@ export function PlaylistView({
               const rect = e.currentTarget.getBoundingClientRect();
               setPageMenuAnchor({ x: rect.left, y: rect.bottom + 4 });
             }}
-            aria-label="Options de la playlist"
+            aria-label={t.playlist.playlistOptionsAria}
             className="w-10 h-10 rounded-full border border-edge bg-panel hover:bg-hover text-ink-soft hover:text-white flex items-center justify-center transition-colors"
           >
             <MoreHorizontal size={17} />
@@ -545,7 +549,7 @@ export function PlaylistView({
               className="px-3.5 py-2 rounded-card bg-panel hover:bg-hover border border-edge text-white text-[12px] font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
             >
               <PlayIcon size={15} fill="currentColor" />
-              <span>Écouter</span>
+              <span>{t.common.listen}</span>
             </button>
             <button
               onClick={() => share.onSaveCopy()}
@@ -553,7 +557,7 @@ export function PlaylistView({
               className="px-3.5 py-2 rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
             >
               <Heart size={15} />
-              <span>{share.saving ? "..." : "Enregistrer dans mes playlists"}</span>
+              <span>{share.saving ? "..." : t.playlist.saveToPlaylists}</span>
             </button>
           </>
         ) : (
@@ -563,7 +567,7 @@ export function PlaylistView({
             className="px-3.5 py-2 rounded-card bg-panel hover:bg-hover border border-edge text-white text-[12px] font-medium flex items-center gap-1.5 transition-colors disabled:opacity-50"
           >
             <ListPlus size={15} />
-            <span>Ajouter tout à ma file</span>
+            <span>{t.playlist.addAllToQueue}</span>
           </button>
         )}
       </div>
@@ -571,26 +575,26 @@ export function PlaylistView({
       {selected.size > 0 && (
         <div className="mt-4 flex items-center gap-2 rounded-card border border-edge bg-card px-3 py-2 animate-rise-in">
           <span className="text-[12px] text-ink-soft">
-            {selected.size} sélectionné{selected.size > 1 ? "s" : ""}
+            {fmt(t.playlist.selectedCount, { n: selected.size, s: plural(selected.size) })}
           </span>
           <span className="flex-1" />
           <button
             onClick={() => void handleAddSelectedToQueue()}
             className="px-2.5 py-1.5 rounded-card text-[12px] text-ink-soft hover:bg-hover hover:text-white transition-colors"
           >
-            Ajouter à la file
+            {t.playlist.addToQueue}
           </button>
           {initial.isOwner && (
             <button
               onClick={() => void handleRemoveSelected()}
               className="px-2.5 py-1.5 rounded-card text-[12px] text-bad hover:bg-bad/10 transition-colors"
             >
-              Supprimer
+              {t.common.delete}
             </button>
           )}
           <button
             onClick={() => setSelected(new Set())}
-            aria-label="Effacer la sélection"
+            aria-label={t.playlist.clearSelectionAria}
             className="rounded p-1.5 text-ink-muted hover:bg-hover hover:text-white transition-colors"
           >
             <X size={14} />
@@ -604,16 +608,16 @@ export function PlaylistView({
             <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-card bg-hover text-ink-muted text-2xl">
               ♪
             </div>
-            <p className="text-[14px] font-semibold text-white">Cette playlist est vide</p>
+            <p className="text-[14px] font-semibold text-white">{t.playlist.emptyTitle}</p>
             <p className="mt-1 text-[12px] text-ink-muted">
-              Colle un lien ou cherche un titre pour commencer.
+              {t.playlist.emptyHint}
             </p>
             <button
               onClick={focusSearch}
               className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold transition-colors"
             >
               <Search size={14} />
-              Rechercher un titre
+              {t.playlist.searchTitle}
             </button>
           </div>
         ) : initial.isOwner ? (
@@ -673,7 +677,7 @@ export function PlaylistView({
           }}
           actions={{
             onPlay: () => void playTrack(menuRow.track, allTracks),
-            playLabel: "Écouter",
+            playLabel: t.common.listen,
             onPlayNext: () =>
               void smartPlayNext(menuRow.track).then((result) =>
                 toastQueueResult(push, result, menuRow.track.title)
@@ -693,14 +697,14 @@ export function PlaylistView({
                     void removeTracksFromPlaylist([id]).then((ok) => {
                       if (!ok) {
                         setTracks(snapshot);
-                        push("Suppression impossible", "error");
+                        push(t.common.deleteImpossible, "error");
                         return;
                       }
-                      push("Retiré de la playlist ✓", "success");
+                      push(t.playlist.removedFromPlaylist, "success");
                       router.refresh();
                     });
                   },
-                  removeLabel: "Supprimer de la playlist",
+                  removeLabel: t.playlist.removeFromPlaylist,
                 }
               : {}),
           }}
@@ -715,13 +719,13 @@ export function PlaylistView({
             setEditingTitle(true);
           }}
         >
-          Renommer
+          {t.playlist.renameAction}
         </MenuItem>
         <MenuItem
           icon={<Copy size={14} />}
           onClick={() => void handleDuplicate()}
         >
-          Dupliquer
+          {t.playlist.duplicateAction}
         </MenuItem>
         <MenuItem
           icon={<Share2 size={14} />}
@@ -730,7 +734,7 @@ export function PlaylistView({
             setPageMenuAnchor(null);
           }}
         >
-          Partager
+          {t.common.share}
         </MenuItem>
         <MenuItem
           icon={<Trash2 size={14} />}
@@ -740,7 +744,7 @@ export function PlaylistView({
             setDeleteOpen(true);
           }}
         >
-          Supprimer
+          {t.common.delete}
         </MenuItem>
       </Popover>
 
@@ -754,9 +758,9 @@ export function PlaylistView({
 
       <ConfirmModal
         open={deleteOpen}
-        title={`Supprimer définitivement « ${initial.name} » ?`}
-        description="Cette action est irréversible."
-        confirmLabel="Supprimer"
+        title={fmt(t.sidebar.deleteTitle, { name: initial.name })}
+        description={t.sidebar.deleteDescription}
+        confirmLabel={t.common.delete}
         loading={deleting}
         onConfirm={() => void handleDeletePlaylist()}
         onClose={() => {

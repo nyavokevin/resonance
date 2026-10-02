@@ -2,8 +2,12 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { usePlayer } from "@/lib/player/engine";
+import { toggleFloatingMode } from "@/lib/floating-player-store";
 import { useJam } from "@/lib/jam-store";
 import { useToasts } from "@/lib/toast-store";
+import { useT } from "@/lib/i18n/locale-store";
+import { dictionaries } from "@/lib/i18n/dictionaries";
+import { useLocaleStore } from "@/lib/i18n/locale-store";
 
 function formatTime(ms: number): string {
   const total = Math.floor(ms / 1000);
@@ -17,6 +21,7 @@ export function Seekbar() {
   const seek = usePlayer((s) => s.seek);
   const jamRole = useJam((s) => (s.session ? (s.session.isHost ? "host" : "guest") : null));
   const [preview, setPreview] = useState<number | null>(null);
+  const t = useT();
 
   const max = durationMs > 0 ? durationMs : 1;
   const shown = preview ?? positionMs;
@@ -34,7 +39,7 @@ export function Seekbar() {
         step={500}
         value={shown}
         disabled={locked}
-        aria-label="Position de lecture"
+        aria-label={t.player.seekAria}
         onChange={(e) => setPreview(Number(e.target.value))}
         onPointerUp={() => {
           if (preview !== null) seek(preview);
@@ -55,7 +60,7 @@ export function Seekbar() {
       <span className="text-ink-muted text-[11px] font-mono w-8">
         {durationMs > 0 ? formatTime(durationMs) : "--:--"}
       </span>
-      {limited && <span className="sr-only">Contrôles limités sur cette plateforme</span>}
+      {limited && <span className="sr-only">{t.player.limitedControls}</span>}
     </div>
   );
 }
@@ -93,10 +98,16 @@ export function KeyboardShortcuts({ children }: { children: ReactNode }) {
           break;
         case "KeyM":
           player.toggleMute();
-          push(player.muted ? "Son activé" : "Son coupé", "info");
+          {
+            const tk = dictionaries[useLocaleStore.getState().locale];
+            push(player.muted ? tk.player.soundOn : tk.player.soundOff, "info");
+          }
           break;
         case "KeyQ":
           player.setQueueOpen(!player.queueOpen);
+          break;
+        case "KeyP":
+          toggleFloatingMode();
           break;
       }
     }

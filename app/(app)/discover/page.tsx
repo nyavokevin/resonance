@@ -11,6 +11,7 @@ import {
   getNewReleases,
 } from "@/lib/providers/spotify-api";
 import { DiscoverView } from "@/components/DiscoverView";
+import { getServerDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,7 @@ export default async function DiscoverPage({
   );
 }
 
-export const metadata = {
-  title: "Découvrir — Resonance",
-};
+export async function generateMetadata() {
+  const { t } = await getServerDictionary();
+  return { title: t.discover.metaTitle };
+}

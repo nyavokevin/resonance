@@ -16,6 +16,7 @@ import {
 import type { Track } from "@/lib/types";
 import { Popover, MenuItem, MenuLabel, type PopoverAnchor } from "@/components/Popover";
 import { PlaylistPicker } from "@/components/PlaylistPicker";
+import { useT } from "@/lib/i18n/locale-store";
 
 export interface TrackMenuActions {
   onPlay?: () => void;
@@ -49,6 +50,7 @@ export function TrackMenu({
 }) {
   const [view, setView] = useState<"main" | "playlists">("main");
   const [prevAnchor, setPrevAnchor] = useState(anchor);
+  const t = useT();
   // Reset à la vue principale à chaque réouverture (pattern render-time).
   if (prevAnchor !== anchor) {
     setPrevAnchor(anchor);
@@ -79,7 +81,7 @@ export function TrackMenu({
               className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-ink-muted hover:text-white transition-colors border-b border-edge"
             >
               <ChevronLeft size={14} />
-              Retour
+              {t.trackMenu.back}
             </button>
           )}
           <PlaylistPicker
@@ -95,43 +97,43 @@ export function TrackMenu({
           <MenuLabel>{track.title}</MenuLabel>
           {actions.onPlay && (
             <MenuItem icon={<Play size={14} />} onClick={() => { onClose(); actions.onPlay!(); }}>
-              {actions.playLabel ?? "Écouter"}
+              {actions.playLabel ?? t.common.listen}
             </MenuItem>
           )}
           {actions.onPlayNext && (
             <MenuItem icon={<ArrowUp size={14} />} onClick={() => { onClose(); actions.onPlayNext!(); }}>
-              Lire ensuite
+              {t.trackMenu.playNext}
             </MenuItem>
           )}
           {actions.onAddToQueue && (
             <MenuItem icon={<ListPlus size={14} />} onClick={() => { onClose(); actions.onAddToQueue!(); }}>
-              Ajouter à la file
+              {t.trackMenu.addToQueue}
             </MenuItem>
           )}
           {actions.onSendToEnd && (
             <MenuItem icon={<ArrowDown size={14} />} onClick={() => { onClose(); actions.onSendToEnd!(); }}>
-              Envoyer à la fin
+              {t.trackMenu.sendToEnd}
             </MenuItem>
           )}
           {actions.onLike && (
             <MenuItem icon={<Heart size={14} />} onClick={() => { onClose(); actions.onLike!(); }}>
-              Aimer ce titre
+              {t.trackMenu.likeTrack}
             </MenuItem>
           )}
           {actions.onShare && (
             <MenuItem icon={<Share2 size={14} />} onClick={() => { onClose(); actions.onShare!(); }}>
-              Partager
+              {t.common.share}
             </MenuItem>
           )}
           {showPlaylists && (
             <MenuItem icon={<ListMusic size={14} />} onClick={() => setView("playlists")}>
-              <span className="flex-1">Ajouter à la playlist</span>
-              <ChevronRight size={14} className="text-ink-muted" />
+              <span className="flex-1">{t.trackMenu.addToPlaylist}</span>
+             
             </MenuItem>
           )}
           {actions.onPromote && (
             <MenuItem icon={<ListPlus size={14} />} onClick={() => { onClose(); actions.onPromote!(); }}>
-              Ajouter à la file manuelle
+              {t.trackMenu.addToManualQueue}
             </MenuItem>
           )}
           {actions.onRemove && (
@@ -140,7 +142,7 @@ export function TrackMenu({
               danger
               onClick={() => { onClose(); actions.onRemove!(); }}
             >
-              {actions.removeLabel ?? "Supprimer"}
+              {actions.removeLabel ?? t.common.delete}
             </MenuItem>
           )}
         </>

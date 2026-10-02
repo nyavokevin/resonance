@@ -2,13 +2,14 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "@/lib/i18n/locale-store";
 
 export function ConfirmModal({
   open,
   title,
   description,
-  confirmLabel = "Supprimer",
-  cancelLabel = "Annuler",
+  confirmLabel,
+  cancelLabel,
   loading,
   onConfirm,
   onClose,
@@ -22,6 +23,9 @@ export function ConfirmModal({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
+  const resolvedConfirm = confirmLabel ?? t.common.delete;
+  const resolvedCancel = cancelLabel ?? t.common.cancel;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -49,14 +53,14 @@ export function ConfirmModal({
             disabled={loading}
             className="px-3.5 py-2 rounded-card border border-edge bg-card text-white text-[12px] font-medium hover:bg-hover transition-colors disabled:opacity-60"
           >
-            {cancelLabel}
+            {resolvedCancel}
           </button>
           <button
             onClick={onConfirm}
             disabled={loading}
             className="px-3.5 py-2 rounded-card bg-bad text-white text-[12px] font-semibold hover:brightness-110 transition disabled:opacity-60"
           >
-            {loading ? "..." : confirmLabel}
+            {loading ? "..." : resolvedConfirm}
           </button>
         </div>
       </div>

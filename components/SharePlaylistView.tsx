@@ -6,6 +6,8 @@ import { usePlayer } from "@/lib/player/engine";
 import { useToasts } from "@/lib/toast-store";
 import { saveSharedPlaylist, type PlaylistTrackRow } from "@/lib/playlists";
 import { PlaylistView } from "@/components/PlaylistView";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt } from "@/lib/i18n/dictionaries";
 
 export function SharePlaylistView({
   initial,
@@ -26,6 +28,7 @@ export function SharePlaylistView({
 }) {
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
   const playTrack = usePlayer((s) => s.playTrack);
   const [saving, setSaving] = useState(false);
 
@@ -34,7 +37,7 @@ export function SharePlaylistView({
   async function handleListen() {
     if (!list.length) return;
     await playTrack(list[0], list);
-    push(`Lecture : ${initial.name}`, "success");
+    push(fmt(t.playlist.playing, { name: initial.name }), "success");
   }
 
   async function handleSave() {
@@ -47,10 +50,10 @@ export function SharePlaylistView({
     );
     setSaving(false);
     if (!row) {
-      push("Enregistrement impossible", "error");
+      push(t.share.saveImpossible, "error");
       return;
     }
-    push("Playlist enregistrée ✓", "success");
+    push(t.share.playlistSaved, "success");
     router.refresh();
     router.push(`/playlist/${row.id}`);
   }

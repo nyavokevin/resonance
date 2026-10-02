@@ -4,6 +4,8 @@ import { useJam } from "@/lib/jam-store";
 import { addTrackToJam } from "@/lib/jam";
 import { usePlayer } from "@/lib/player/engine";
 import type { Track } from "@/lib/types";
+import { dictionaries, fmt } from "@/lib/i18n/dictionaries";
+import { useLocaleStore } from "@/lib/i18n/locale-store";
 
 export type QueueAddResult = "added" | "moved" | "shared" | "failed";
 
@@ -41,13 +43,14 @@ export function toastQueueResult(
   result: QueueAddResult,
   title: string
 ) {
+  const t = dictionaries[useLocaleStore.getState().locale];
   if (result === "moved") {
-    push("Déjà dans la file — déplacé en position suivante", "info");
+    push(t.smartQueue.movedNext, "info");
   } else if (result === "added") {
-    push(`Ajouté à la file : ${title} ✓`, "success");
+    push(fmt(t.smartQueue.addedToQueue, { title }), "success");
   } else if (result === "shared") {
-    push(`Ajouté à la file partagée : ${title} ✓`, "success");
+    push(fmt(t.smartQueue.addedToShared, { title }), "success");
   } else {
-    push("Ajout impossible", "error");
+    push(t.common.addImpossible, "error");
   }
 }

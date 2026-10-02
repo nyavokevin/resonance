@@ -5,6 +5,8 @@ import {
   getBrowseCategory,
   getCategoryPlaylists,
 } from "@/lib/providers/spotify-api";
+import { getServerDictionary } from "@/lib/i18n/server";
+import { fmt, plural } from "@/lib/i18n/dictionaries";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +15,7 @@ export default async function DiscoverCategoryPage({
 }: {
   params: Promise<{ categoryId: string }>;
 }) {
+  const { t } = await getServerDictionary();
   const { categoryId } = await params;
   const [category, playlists] = await Promise.all([
     getBrowseCategory(categoryId).catch(() => null),
@@ -25,7 +28,7 @@ export default async function DiscoverCategoryPage({
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-[12px] text-ink-muted">
         <Link href="/discover" className="hover:text-white transition-colors">
-          Découvrir
+          {t.discover.breadcrumb}
         </Link>
         <ChevronRight size={13} />
         <span className="text-ink-soft">{category.name}</span>
@@ -43,14 +46,16 @@ export default async function DiscoverCategoryPage({
         </span>
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-            Catégorie · Spotify
+            {t.discover.categorySpotify}
           </p>
           <h1 className="mt-0.5 truncate font-display text-[26px] font-bold text-white">
             {category.name}
           </h1>
           <p className="text-[12px] text-ink-muted">
-            {playlists.length} playlist{playlists.length > 1 ? "s" : ""} publique
-            {playlists.length > 1 ? "s" : ""}
+            {fmt(t.discover.publicPlaylists, {
+              n: playlists.length,
+              s: plural(playlists.length),
+            })}
           </p>
         </div>
       </header>
@@ -58,7 +63,7 @@ export default async function DiscoverCategoryPage({
       {/* Grille playlists du genre */}
       {playlists.length === 0 ? (
         <p className="mt-6 text-[13px] text-ink-muted">
-          Aucune playlist dans cette catégorie pour le moment.
+          {t.discover.noPlaylists}
         </p>
       ) : (
         <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -91,7 +96,7 @@ export default async function DiscoverCategoryPage({
               )}
               <span className="mt-1 block truncate text-[11px] text-ink-muted">
                 {p.owner}
-                {p.trackCount ? ` · ${p.trackCount} titres` : ""}
+                {p.trackCount ? fmt(t.discover.tracksSuffix, { n: p.trackCount }) : ""}
               </span>
             </Link>
           ))}

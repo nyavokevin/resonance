@@ -9,6 +9,8 @@ import { useToasts } from "@/lib/toast-store";
 import { PLATFORM_LABELS, type Track } from "@/lib/types";
 import { addTrackToPlaylist, addTracksToPlaylist } from "@/lib/playlists";
 import { formatDuration } from "@/components/TrackList";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt } from "@/lib/i18n/dictionaries";
 
 interface YtResult {
   videoId: string;
@@ -105,6 +107,7 @@ export function PlaylistSuggestions({
 }) {
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
   const playTrack = usePlayer((s) => s.playTrack);
 
   const [suggestions, setSuggestions] = useState<Track[]>([]);
@@ -191,11 +194,11 @@ export function PlaylistSuggestions({
     const ok = await addTrackToPlaylist(playlistId, { ...track, auto: undefined });
     setAddingId(null);
     if (!ok) {
-      push("Ajout impossible", "error");
+      push(t.common.addImpossible, "error");
       return;
     }
     setSuggestions((prev) => prev.filter((t) => t.id !== track.id));
-    push(`Ajouté à la playlist ✓`, "success");
+    push(t.suggestions.addedOne, "success");
     router.refresh();
   }
 
@@ -206,11 +209,11 @@ export function PlaylistSuggestions({
     const ok = await addTracksToPlaylist(playlistId, clean);
     setAddingAll(false);
     if (!ok) {
-      push("Ajout impossible", "error");
+      push(t.common.addImpossible, "error");
       return;
     }
     setSuggestions([]);
-    push(`${clean.length} titre(s) ajoutés à la playlist ✓`, "success");
+    push(fmt(t.suggestions.addedMany, { n: clean.length }), "success");
     router.refresh();
   }
 
@@ -226,22 +229,22 @@ export function PlaylistSuggestions({
   if (!loading && suggestions.length === 0) return null;
 
   return (
-    <section className="mt-8" aria-label="Suggestions automatiques">
+    <section className="mt-8" aria-label={t.suggestions.autoLabel}>
       <div className="flex items-center gap-2">
         <Sparkles size={15} className="text-accent shrink-0" />
         <h2 className="font-display text-[15px] font-semibold text-white tracking-tight">
-          Suggestions
+          {t.suggestions.title}
         </h2>
-        <span className="text-[11px] text-ink-muted">Basé sur cette playlist</span>
+        <span className="text-[11px] text-ink-muted">{t.suggestions.basedOn}</span>
         <span className="flex-1" />
         <button
           onClick={() => setRound((r) => r + 1)}
           disabled={loading}
-          title="Actualiser les suggestions"
+          title={t.suggestions.refreshTitle}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-card bg-panel border border-edge text-ink-soft hover:text-white hover:bg-hover text-[12px] font-medium transition-colors disabled:opacity-50"
         >
           <RefreshCw size={13} className={loading ? "animate-spin" : ""} />
-          Actualiser
+          {t.suggestions.refresh}
         </button>
         {isOwner && suggestions.length > 0 && (
           <button
@@ -249,7 +252,7 @@ export function PlaylistSuggestions({
             disabled={addingAll}
             className="px-3 py-1.5 rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold transition-colors disabled:opacity-50"
           >
-            {addingAll ? "Ajout…" : `Tout ajouter (${suggestions.length})`}
+            {addingAll ? t.suggestions.adding : fmt(t.suggestions.addAll, { n: suggestions.length })}
           </button>
         )}
       </div>
@@ -306,8 +309,8 @@ export function PlaylistSuggestions({
                     void handleAddOne(track);
                   }}
                   disabled={addingId === track.id}
-                  title={`Ajouter « ${track.title} » à la playlist`}
-                  aria-label={`Ajouter ${track.title} à la playlist`}
+                  title={fmt(t.suggestions.addOneTitle, { title: track.title })}
+                  aria-label={fmt(t.suggestions.addOneAria, { title: track.title })}
                   className="shrink-0 w-8 h-8 rounded-full bg-accent hover:bg-accent-hover text-white flex items-center justify-center transition-all disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   {addingId === track.id ? (
@@ -322,8 +325,8 @@ export function PlaylistSuggestions({
                     e.stopPropagation();
                     handleQueue(track);
                   }}
-                  title={`Ajouter « ${track.title} » à la file`}
-                  aria-label={`Ajouter ${track.title} à la file`}
+                  title={fmt(t.suggestions.queueOneTitle, { title: track.title })}
+                  aria-label={fmt(t.suggestions.queueOneAria, { title: track.title })}
                   className="shrink-0 w-8 h-8 rounded-full bg-panel border border-edge text-ink-soft hover:text-white hover:bg-hover flex items-center justify-center transition-all sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   <Plus size={15} />

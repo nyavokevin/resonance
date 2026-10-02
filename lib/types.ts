@@ -1,3 +1,5 @@
+import { fr } from "./i18n/fr";
+
 export type Platform =
   | "spotify"
   | "youtube"
@@ -39,7 +41,7 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   "youtube-music": "YouTube Music",
   "apple-music": "Apple Music",
   soundcloud: "SoundCloud",
-  direct: "Fichier",
+  direct: fr.types.fileLabel,
 };
 
 export const PLATFORM_COLORS: Record<Platform, string> = {

@@ -1,5 +1,6 @@
 import { getSpotifyAlbum, getSpotifyPlaylistMeta } from "@/lib/providers/spotify-api";
 import { SpotifyImportView } from "@/components/SpotifyImportView";
+import { getServerDictionary } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +11,15 @@ export default async function SpotifyImportPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ type?: string }>;
 }) {
+  const { t } = await getServerDictionary();
   const { id } = await params;
   const { type } = await searchParams;
   const kind = type === "album" ? "album" : "playlist";
 
-  let title = kind === "album" ? "Album Spotify" : "Playlist Spotify";
+  let title =
+    kind === "album"
+      ? `${t.importView.albumImport} ${t.importView.importSuffix}`
+      : `${t.importView.playlistImport} ${t.importView.importSuffix}`;
   let coverUrl: string | undefined;
   let artist: string | undefined;
   let trackCount: number | undefined;

@@ -2,11 +2,13 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchRecentTracks, fetchTrending } from "@/lib/library-server";
 import { RecentGrid, TrendRows } from "@/components/TrackList";
 import { LastPlayedBanner } from "@/components/LastPlayedBanner";
+import { getServerDictionary } from "@/lib/i18n/server";
 import { Network } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  const { t } = await getServerDictionary();
   const [recent, trending] = await Promise.all([
     fetchRecentTracks(12).catch(() => []),
     fetchTrending(6).catch(() => []),
@@ -24,7 +26,12 @@ export default async function HomePage() {
 
   const name = profile?.display_name ?? user?.email?.split("@")[0] ?? "";
   const hour = new Date().getHours();
-  const greeting = hour < 6 ? "Bonne nuit" : hour < 18 ? "Bonjour" : "Bonsoir";
+  const greeting =
+    hour < 6
+      ? t.home.greetingNight
+      : hour < 18
+        ? t.home.greetingMorning
+        : t.home.greetingEvening;
   const lastTrack = recent[0];
 
   return (
@@ -33,20 +40,19 @@ export default async function HomePage() {
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-card bg-panel border border-edge text-ink-soft text-[11px] mb-2 font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-ok" />
-            Passerelle multi-plateformes connectée
+            {t.home.badge}
           </div>
           <h1 className="font-display text-[24px] font-bold text-white tracking-tight">
             {greeting}, {name}
           </h1>
           <p className="text-ink-soft text-[13px] mt-0.5">
-            Écoute tes flux Spotify, YouTube et SoundCloud fusionnés en un seul
-            endroit.
+            {t.home.subtitle}
           </p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-card bg-panel border border-edge w-fit">
           <div className="flex items-center gap-1.5 text-[11px] font-medium text-ink-soft">
             <Network size={15} className="text-accent" />
-            <span>3 services synchronisés</span>
+            <span>{t.home.servicesSynced}</span>
           </div>
         </div>
       </section>
@@ -56,7 +62,7 @@ export default async function HomePage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-[16px] font-semibold text-white tracking-tight">
-            Récemment écouté
+            {t.home.recentlyPlayed}
           </h2>
         </div>
         <RecentGrid tracks={recent.slice(0, 6)} />
@@ -65,10 +71,10 @@ export default async function HomePage() {
       <section className="space-y-2.5 pb-6">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-[16px] font-semibold text-white tracking-tight">
-            Tendances de ta bibliothèque unifiée
+            {t.home.trends}
           </h2>
           <span className="text-[11px] text-ink-muted">
-            Basé sur ton historique d&apos;écoute
+            {t.home.basedOnHistory}
           </span>
         </div>
         <TrendRows tracks={trending} />

@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { enumerateSpotifyCollection } from "@/lib/providers/resolve";
+import {
+  LOCALE_COOKIE,
+  dictionaries,
+  isLocale,
+} from "@/lib/i18n/dictionaries";
 
 /**
  * Énumération brute d'une collection Spotify (métadonnées seules,
@@ -12,27 +18,34 @@ export async function GET(request: Request) {
   const id = searchParams.get("id")?.trim();
   if ((kind !== "album" && kind !== "playlist") || !id) {
     return NextResponse.json(
-      { error: "Paramètres kind (album|playlist) et id requis." },
+      { error: "Missing kind (album|playlist) and id parameters." },
       { status: 400 }
     );
   }
+
+  const cookieStore = await cookies().catch(() => null);
+  const raw = cookieStore?.get(LOCALE_COOKIE)?.value;
+  const locale = isLocale(raw) ? raw : "fr";
+  const t = dictionaries[locale];
 
   try {
     const enumerated = await enumerateSpotifyCollection(
       kind,
       id,
-      kind === "album" ? "Album Spotify" : "Playlist Spotify"
+      kind === "album"
+        ? `${t.importView.albumImport} Spotify`
+        : `${t.importView.playlistImport} Spotify`
     );
     if (!enumerated || enumerated.items.length === 0) {
       return NextResponse.json(
-        { error: "Collection Spotify introuvable." },
+        { error: t.importView.collectionNotFound },
         { status: 422 }
       );
     }
     return NextResponse.json(enumerated);
   } catch {
     return NextResponse.json(
-      { error: "Collection Spotify indisponible." },
+      { error: t.importView.collectionNotFound },
       { status: 502 }
     );
   }

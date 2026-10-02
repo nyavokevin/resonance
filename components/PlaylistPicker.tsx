@@ -15,6 +15,8 @@ import {
   type PlaylistSummary,
 } from "@/lib/playlists";
 import { Skeleton } from "@/components/Skeleton";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt, plural } from "@/lib/i18n/dictionaries";
 
 /** Contenu "Ajouter à une playlist" : création inline + liste avec ✓ toggle.
  * bulkTracks : mode multi-sélection — cliquer une playlist ajoute tous les
@@ -30,6 +32,7 @@ export function PlaylistPicker({
 }) {
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
   const bulk = bulkTracks && bulkTracks.length > 0;
   const [loading, setLoading] = useState(bulk ? false : true);
   const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
@@ -82,7 +85,7 @@ export function PlaylistPicker({
     const row = await createPlaylist(name);
     if (!row) {
       setCreating(false);
-      push("Création impossible", "error");
+      push(t.common.createImpossible, "error");
       return;
     }
     const ok = bulk
@@ -90,14 +93,14 @@ export function PlaylistPicker({
       : await addTrackToPlaylist(row.id, track!);
     setCreating(false);
     if (!ok) {
-      push("Titre(s) non ajouté(s)", "error");
+      push(t.playlistPicker.notAdded, "error");
       return;
     }
     setNewName("");
     push(
       bulk
-        ? `${bulkTracks!.length} titre(s) ajoutés à ${row.name} ✓`
-        : `Ajouté à ${row.name} ✓`,
+        ? fmt(t.playlistPicker.addedCountTo, { n: bulkTracks!.length, name: row.name })
+        : fmt(t.playlistPicker.addedTo, { name: row.name }),
       "success"
     );
     router.refresh();
@@ -111,11 +114,11 @@ export function PlaylistPicker({
       const ok = await addTracksToPlaylist(p.id, bulkTracks!);
       setBusyId(null);
       if (ok) {
-        push(`${bulkTracks!.length} titre(s) ajoutés à ${p.name} ✓`, "success");
+        push(fmt(t.playlistPicker.addedCountTo, { n: bulkTracks!.length, name: p.name }), "success");
         router.refresh();
         onDone?.();
       } else {
-        push("Ajout impossible", "error");
+        push(t.common.addImpossible, "error");
       }
       return;
     }
@@ -129,18 +132,18 @@ export function PlaylistPicker({
           next.delete(p.id);
           return next;
         });
-        push(`Retiré de ${p.name}`, "success");
+        push(fmt(t.playlistPicker.removedFrom, { name: p.name }), "success");
       } else {
-        push("Opération impossible", "error");
+        push(t.common.operationImpossible, "error");
       }
     } else if (track) {
       const ok = await addTrackToPlaylist(p.id, track);
       if (ok) {
         const map = await findTrackInPlaylists(track);
         setPresent(map);
-        push(`Ajouté à ${p.name} ✓`, "success");
+        push(fmt(t.playlistPicker.addedTo, { name: p.name }), "success");
       } else {
-        push("Ajout impossible", "error");
+        push(t.common.addImpossible, "error");
       }
     }
     setBusyId(null);
@@ -153,15 +156,15 @@ export function PlaylistPicker({
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          placeholder="Nouvelle playlist…"
+          placeholder={t.playlistPicker.newPlaylistPlaceholder}
           maxLength={80}
-          aria-label="Nom de la nouvelle playlist"
+          aria-label={t.playlistPicker.newPlaylistAria}
           className="min-w-0 flex-1 rounded-card border border-edge bg-base px-2 py-1.5 text-[12px] text-white placeholder:text-ink-muted outline-none focus:border-accent transition-colors"
         />
         <button
           type="submit"
           disabled={!newName.trim() || creating}
-          aria-label="Créer la playlist"
+          aria-label={t.playlistPicker.createPlaylistAria}
           className="shrink-0 rounded-card bg-accent hover:bg-accent-hover text-white p-1.5 transition-colors disabled:opacity-60"
         >
           <ListPlus size={14} />
@@ -176,7 +179,7 @@ export function PlaylistPicker({
           </div>
         ) : playlists.length === 0 ? (
           <p className="px-3 py-3 text-[12px] text-ink-muted">
-            Aucune playlist — crée-en une ci-dessus.
+            {t.playlistPicker.noPlaylists}
           </p>
         ) : (
           playlists.map((p) => {
@@ -199,7 +202,7 @@ export function PlaylistPicker({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px]">{p.name}</span>
                   <span className="block text-[11px] text-ink-muted">
-                    {p.trackCount} titre{p.trackCount > 1 ? "s" : ""}
+                    {fmt(t.common.titlesCountWithSuffix, { n: p.trackCount, s: plural(p.trackCount) })}
                   </span>
                 </span>
                 {!bulk && checked && <Check size={14} className="shrink-0 text-accent" />}

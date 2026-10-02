@@ -4,12 +4,15 @@ import { Disc, Music2 } from "lucide-react";
 import { getSpotifyArtist, getArtistAlbums } from "@/lib/providers/spotify-api";
 import { ArtistPlayButton } from "@/components/ArtistPlayButton";
 import { PLATFORM_COLORS } from "@/lib/types";
+import { getServerDictionary } from "@/lib/i18n/server";
+import { fmt } from "@/lib/i18n/dictionaries";
+import type { Locale } from "@/lib/i18n/dictionaries";
 
 export const dynamic = "force-dynamic";
 
-function formatFollowers(n?: number): string {
+function formatFollowers(n: number | undefined, locale: Locale): string {
   if (n === undefined) return "";
-  return new Intl.NumberFormat("fr", { notation: "compact" }).format(n);
+  return new Intl.NumberFormat(locale, { notation: "compact" }).format(n);
 }
 
 export default async function SpotifyArtistPage({
@@ -17,6 +20,7 @@ export default async function SpotifyArtistPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { t, locale } = await getServerDictionary();
   const { id } = await params;
   const [artist, albums] = await Promise.all([
     getSpotifyArtist(id).catch(() => null),
@@ -38,7 +42,7 @@ export default async function SpotifyArtistPage({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-              Artiste
+              {t.artistPage.artistLabel}
             </p>
             <span
               className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded text-white"
@@ -52,25 +56,26 @@ export default async function SpotifyArtistPage({
           </h1>
           <p className="mt-0.5 text-[13px] text-ink-soft">
             {artist.followers !== undefined
-              ? `${formatFollowers(artist.followers)} abonnés`
-              : "Abonnés inconnus"}
+              ? fmt(t.artistPage.followers, {
+                  n: formatFollowers(artist.followers, locale),
+                })
+              : t.artistPage.followersUnknown}
             {artist.genres && artist.genres.length > 0
               ? ` · ${artist.genres.slice(0, 3).join(", ")}`
               : ""}
           </p>
           <p className="mt-1 text-[12px] text-ink-muted">
-            Top titres indisponibles via l&apos;API — explore les albums
-            ci-dessous.
+            {t.artistPage.topUnavailable}
           </p>
           <ArtistPlayButton artistName={artist.name} />
         </div>
       </div>
 
       <h2 className="mt-8 mb-3 font-display text-[16px] font-semibold text-white">
-        Albums
+        {t.artistPage.albums}
       </h2>
       {albums.length === 0 ? (
-        <p className="text-[13px] text-ink-muted">Aucun album trouvé.</p>
+        <p className="text-[13px] text-ink-muted">{t.artistPage.noAlbums}</p>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {albums.map((album) => (
@@ -96,7 +101,7 @@ export default async function SpotifyArtistPage({
               </span>
               <span className="block truncate text-[12px] text-ink-soft">
                 {album.releaseDate ? `${album.releaseDate.slice(0, 4)} · ` : ""}
-                {album.trackCount ?? "?"} titres
+                {fmt(t.common.titlesCount, { n: album.trackCount ?? "?" })}
               </span>
             </Link>
           ))}

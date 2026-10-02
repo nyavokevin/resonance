@@ -8,6 +8,7 @@ import {
   regenerateShareToken,
   fetchPlaylistDetail,
 } from "@/lib/playlists";
+import { useT } from "@/lib/i18n/locale-store";
 
 /** Panneau "Partager" : toggle public, lien, copier/ouvrir/régénérer. */
 export function SharePlaylistPanel({
@@ -20,6 +21,7 @@ export function SharePlaylistPanel({
   initialToken: string | null;
 }) {
   const push = useToasts((s) => s.push);
+  const t = useT();
   const [isOn, setIsOn] = useState(initialIsPublic);
   const [token, setToken] = useState<string | null>(initialToken);
   const [busy, setBusy] = useState(false);
@@ -44,9 +46,9 @@ export function SharePlaylistPanel({
     const ok = await togglePlaylistPublic(playlistId, !isOn);
     if (ok) {
       await refresh();
-      push(!isOn ? "Playlist publique ✓" : "Playlist privée ✓", "success");
+      push(!isOn ? t.share.madePublic : t.share.madePrivate, "success");
     } else {
-      push("Opération impossible", "error");
+      push(t.common.operationImpossible, "error");
     }
     setBusy(false);
   }
@@ -57,11 +59,11 @@ export function SharePlaylistPanel({
     const next = await regenerateShareToken(playlistId);
     setBusy(false);
     if (!next) {
-      push("Opération impossible", "error");
+      push(t.common.operationImpossible, "error");
       return;
     }
     setToken(next);
-    push("Nouveau lien généré ✓", "success");
+    push(t.share.newLink, "success");
   }
 
   async function handleCopy() {
@@ -69,10 +71,10 @@ export function SharePlaylistPanel({
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
-      push("Lien copié ✓", "success");
+      push(t.common.linkCopied, "success");
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      push("Copie impossible", "error");
+      push(t.common.copyFailed, "error");
     }
   }
 
@@ -80,9 +82,9 @@ export function SharePlaylistPanel({
     <div className="w-72 p-3 space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
-          <span className="text-[13px] font-medium text-white">Rendre publique</span>
+          <span className="text-[13px] font-medium text-white">{t.share.makePublic}</span>
           <span className="text-[11px] text-ink-muted">
-            Accessible via lien de partage
+            {t.share.accessibleViaLink}
           </span>
         </div>
         <button
@@ -109,21 +111,21 @@ export function SharePlaylistPanel({
               readOnly
               value={link}
               onFocus={(e) => e.target.select()}
-              aria-label="Lien de partage"
+              aria-label={t.share.shareLinkAria}
               className="min-w-0 flex-1 rounded-card border border-edge bg-base px-2 py-1.5 text-[11px] font-mono text-ink-soft outline-none"
             />
             <button
               onClick={() => void handleCopy()}
-              aria-label="Copier le lien"
-              title="Copier le lien"
+              aria-label={t.share.copyLinkAria}
+              title={t.share.copyLinkAria}
               className="shrink-0 rounded-card bg-accent hover:bg-accent-hover text-white p-1.5 transition-colors"
             >
               {copied ? <Check size={14} /> : <Copy size={14} />}
             </button>
             <button
               onClick={() => window.open(link, "_blank", "noopener")}
-              aria-label="Ouvrir le lien"
-              title="Ouvrir le lien"
+              aria-label={t.share.openLinkAria}
+              title={t.share.openLinkAria}
               className="shrink-0 rounded-card border border-edge bg-base hover:bg-hover text-ink-soft hover:text-white p-1.5 transition-colors"
             >
               <ExternalLink size={14} />
@@ -135,7 +137,7 @@ export function SharePlaylistPanel({
             className="flex items-center gap-1.5 text-[12px] text-ink-muted hover:text-bad transition-colors disabled:opacity-60"
           >
             <RefreshCw size={13} />
-            Régénérer le lien (invalide l&apos;ancien)
+            {t.share.regenerate}
           </button>
         </>
       )}

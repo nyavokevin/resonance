@@ -41,6 +41,8 @@ import { Popover, MenuItem, type PopoverAnchor } from "@/components/Popover";
 import { ConfirmModal } from "@/components/Modal";
 import { PlaylistPicker } from "@/components/PlaylistPicker";
 import { createPlaylist, addTracksToPlaylist } from "@/lib/playlists";
+import { useT, useLocaleStore } from "@/lib/i18n/locale-store";
+import { fmt, plural } from "@/lib/i18n/dictionaries";
 
 function Equalizer() {
   return (
@@ -65,13 +67,14 @@ interface RowInfo {
 }
 
 function RowMenuButton({ onClick }: { onClick: (e: React.MouseEvent<HTMLElement>) => void }) {
+  const t = useT();
   return (
     <button
       onClick={(e) => {
         e.stopPropagation();
         onClick(e);
       }}
-      aria-label="Options"
+      aria-label={t.queuePanel.optionsAria}
       className="rounded p-1 text-ink-muted opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity duration-150 hover:text-white shrink-0"
     >
       <MoreHorizontal size={14} />
@@ -80,6 +83,7 @@ function RowMenuButton({ onClick }: { onClick: (e: React.MouseEvent<HTMLElement>
 }
 
 function RemoveButton({ onClick, hidden }: { onClick: () => void; hidden?: boolean }) {
+  const t = useT();
   if (hidden) return null;
   return (
     <button
@@ -87,7 +91,7 @@ function RemoveButton({ onClick, hidden }: { onClick: () => void; hidden?: boole
         e.stopPropagation();
         onClick();
       }}
-      aria-label="Retirer de la file"
+      aria-label={t.queuePanel.removeFromQueueAria}
       className="rounded p-1 text-ink-muted opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity duration-150 hover:text-bad shrink-0"
     >
       <X size={14} />
@@ -111,13 +115,14 @@ function RowCover({ track }: { track: Track }) {
 }
 
 function RowMeta({ track, isAuto }: { track: Track; isAuto?: boolean }) {
+  const t = useT();
   return (
     <div className="flex flex-col min-w-0 flex-1">
       <span className="text-white text-[12px] font-medium truncate group-hover:text-accent transition-colors">
         {track.title}
       </span>
       <span className="text-ink-muted text-[11px] truncate">
-        {track.artist} • {PLATFORM_LABELS[track.platform]}
+        {track.artist} • {track.platform === "direct" ? t.types.fileLabel : PLATFORM_LABELS[track.platform]}
         {isAuto && (
           <span className="ml-1 rounded border border-edge px-1 text-[10px] text-ink-muted">
             AUTO
@@ -239,6 +244,8 @@ export function QueuePanel() {
   const autoplay = usePlayer((s) => s.autoplay);
   const push = useToasts((s) => s.push);
   const router = useRouter();
+  const t = useT();
+  const locale = useLocaleStore((s) => s.locale);
 
   const jamRole = useJam((s) => (s.session ? (s.session.isHost ? "host" : "guest") : null));
   const canEdit = jamRole !== "guest";
@@ -323,7 +330,7 @@ export function QueuePanel() {
     const to = (e.over?.data.current as { qIndex: number } | undefined)?.qIndex;
     if (from === undefined || to === undefined || from === to) return;
     reorderQueue(from, to);
-    push("File réorganisée", "info");
+    push(t.queuePanel.queueReordered, "info");
   }
 
   function openMenuTrack(e: React.MouseEvent<HTMLElement>, info: RowInfo, isAuto: boolean) {
@@ -340,7 +347,7 @@ export function QueuePanel() {
     const count = qIndices.length;
     for (const q of qIndices) removeFromQueue(q);
     setSelected(new Set());
-    if (count > 0) push(`${count} titre(s) retiré(s) ✓`, "success");
+    if (count > 0) push(fmt(t.queuePanel.removedCount, { n: count }), "success");
   }
 
   function handlePlaySelected() {
@@ -360,7 +367,7 @@ export function QueuePanel() {
     const row = await createPlaylist(name);
     if (!row) {
       setSaving(false);
-      push("Création impossible", "error");
+      push(t.common.createImpossible, "error");
       return;
     }
     const ok = await addTracksToPlaylist(
@@ -369,11 +376,11 @@ export function QueuePanel() {
     );
     setSaving(false);
     if (!ok) {
-      push("Sauvegarde impossible", "error");
+      push(t.queuePanel.saveImpossible, "error");
       return;
     }
     setSaveAnchor(null);
-    push(`File sauvegardée : « ${row.name} » ✓`, "success");
+    push(fmt(t.queuePanel.queueSaved, { name: row.name }), "success");
     router.refresh();
     router.push(`/playlist/${row.id}`);
   }
@@ -394,12 +401,12 @@ export function QueuePanel() {
     <aside
       tabIndex={0}
       onKeyDown={onKeyDownPanel}
-      className="fixed inset-x-0 bottom-[90px] z-[60] flex flex-col gap-3 rounded-t-2xl rounded-b-2xl border border-edge bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl max-h-[70vh] xl:static xl:inset-auto xl:z-auto xl:rounded-card xl:border xl:pb-4 xl:shadow-none xl:w-[300px] xl:shrink-0 xl:h-fit xl:sticky xl:top-[88px] xl:max-h-[calc(100vh-212px)] focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+      className="fixed inset-x-0 lg:left-[220px] bottom-[90px] z-[60] flex flex-col gap-3 rounded-t-2xl rounded-b-2xl border border-edge bg-panel p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl max-h-[70vh] xl:static xl:inset-auto xl:z-auto xl:rounded-card xl:border xl:pb-4 xl:shadow-none xl:w-[300px] xl:shrink-0 xl:h-fit xl:sticky xl:top-[88px] xl:max-h-[calc(100vh-212px)] focus:outline-none focus-visible:ring-1 focus-visible:ring-accent"
     >
       {/* Drag handle (mobile) */}
       <button
         onClick={() => setQueueOpen(false)}
-        aria-label="Fermer la file d'attente"
+        aria-label={t.queuePanel.closeQueueAria}
         className="mx-auto h-1.5 w-10 rounded-full bg-edge xl:hidden shrink-0"
       />
 
@@ -407,7 +414,7 @@ export function QueuePanel() {
         <div className="flex items-center gap-2">
           <ListMusic size={18} className="text-accent" />
           <h2 className="font-display text-[15px] font-semibold text-white">
-            {"File d'attente"}
+            {t.queuePanel.queueTitle}
           </h2>
           <span className="text-[11px] font-mono px-1.5 py-0.2 rounded-[6px] bg-card text-ink-muted border border-edge">
             {queue.length}
@@ -417,7 +424,7 @@ export function QueuePanel() {
           onClick={() => setQueueOpen(false)}
           className="text-[11px] text-ink-muted hover:text-bad transition-colors font-medium hidden xl:block"
         >
-          Fermer
+          {t.common.close}
         </button>
       </div>
 
@@ -426,7 +433,7 @@ export function QueuePanel() {
         <div className="space-y-2 shrink-0">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-              En cours de lecture
+              {t.queuePanel.nowPlaying}
             </span>
             {isPlaying && !queueEnded && <Equalizer />}
           </div>
@@ -447,17 +454,17 @@ export function QueuePanel() {
             </div>
             <div className="flex flex-col min-w-0 flex-1">
               <span className="text-white text-[13px] font-semibold truncate">
-                {queueEnded ? "File terminée" : current.title}
+                {queueEnded ? t.queuePanel.queueEndedTitle : current.title}
               </span>
               <span className="text-ink-muted text-[12px] truncate">
-                {queueEnded ? "Lecture terminée" : current.artist}
+                {queueEnded ? t.queuePanel.queueEndedArtist : current.artist}
               </span>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[10px] text-accent font-semibold uppercase">
-                  {PLATFORM_LABELS[current.platform]}
+                  {current.platform === "direct" ? t.types.fileLabel : PLATFORM_LABELS[current.platform]}
                 </span>
                 <span className="text-ink-muted text-[11px] font-mono">
-                  {formatDuration(remainingMs)} restantes
+                  {fmt(t.queuePanel.remaining, { duration: formatDuration(remainingMs) })}
                 </span>
               </div>
             </div>
@@ -467,7 +474,7 @@ export function QueuePanel() {
                 const rect = e.currentTarget.getBoundingClientRect();
                 setCurrentMenuAnchor({ x: rect.left, y: rect.bottom + 4 });
               }}
-              aria-label="Options du morceau en cours"
+              aria-label={t.queuePanel.currentOptionsAria}
               className="rounded p-1 text-ink-muted hover:text-white transition-colors shrink-0"
             >
               <MoreHorizontal size={16} />
@@ -477,8 +484,8 @@ export function QueuePanel() {
       ) : (
         <p className="text-[12px] text-ink-muted py-2 shrink-0">
           {queueEnded
-            ? "File terminée."
-            : "La file est vide. Colle un lien ou cherche un titre pour lancer la lecture."}
+            ? t.queuePanel.queueDone
+            : t.queuePanel.queueEmptyHint}
         </p>
       )}
 
@@ -487,12 +494,11 @@ export function QueuePanel() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-              À suivre
+              {t.queuePanel.upNext}
             </span>
             {manualRows.length > 0 && (
               <span className="text-[11px] text-ink-muted font-mono truncate">
-                {manualRows.length} titre{manualRows.length > 1 ? "s" : ""} ·{" "}
-                {formatDuration(manualTotal)}
+                {fmt(t.queuePanel.countDuration, { n: manualRows.length, s: plural(manualRows.length), duration: formatDuration(manualTotal) })}
               </span>
             )}
           </div>
@@ -500,8 +506,8 @@ export function QueuePanel() {
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onClick={() => void playAt(manualRows[0].qIndex)}
-                title="Lire tout de suite"
-                aria-label="Lire tout de suite"
+                title={t.queuePanel.playNowTitle}
+                aria-label={t.queuePanel.playNowTitle}
                 className="rounded p-1 text-ink-soft hover:bg-hover hover:text-white transition-colors"
               >
                 <Play size={13} fill="currentColor" />
@@ -511,11 +517,11 @@ export function QueuePanel() {
                   if (manualRows.length > 5) setClearOpen(true);
                   else {
                     clearUpcoming();
-                    push("File vidée", "info");
+                    push(t.queuePanel.queueEmptied, "info");
                   }
                 }}
-                title="Vider la file"
-                aria-label="Vider la file"
+                title={t.queuePanel.clearQueueTitle}
+                aria-label={t.queuePanel.clearQueueTitle}
                 className="rounded p-1 text-ink-soft hover:bg-hover hover:text-bad transition-colors"
               >
                 <Trash2 size={13} />
@@ -523,13 +529,13 @@ export function QueuePanel() {
               <button
                 onClick={(e) => {
                   setSaveName(
-                    `File du ${new Date().toLocaleDateString("fr-FR")}`
+                    fmt(t.queuePanel.defaultSaveName, { date: new Date().toLocaleDateString(locale === "en" ? "en-US" : "fr-FR") })
                   );
                   const rect = e.currentTarget.getBoundingClientRect();
                   setSaveAnchor({ x: rect.left, y: rect.bottom + 4 });
                 }}
-                title="Sauvegarder en playlist"
-                aria-label="Sauvegarder en playlist"
+                title={t.queuePanel.saveAsPlaylistTitle}
+                aria-label={t.queuePanel.saveAsPlaylistTitle}
                 className="rounded p-1 text-ink-soft hover:bg-hover hover:text-accent transition-colors"
               >
                 <Save size={13} />
@@ -541,8 +547,8 @@ export function QueuePanel() {
         {manualRows.length === 0 ? (
           <p className="text-[12px] text-ink-muted py-1.5">
             {canEdit
-              ? "Rien dans la file — ajoute des titres depuis la recherche ou tes playlists."
-              : "Rien dans la file partagée pour le moment."}
+              ? t.queuePanel.queueEmptySave
+              : t.queuePanel.queueEmptyShared}
           </p>
         ) : canDrag ? (
           <DndContext
@@ -588,12 +594,12 @@ export function QueuePanel() {
 
       {/* C — Suggestions automatiques */}
       {(autoplay || autoRows.length > 0) && (
-        <div className="space-y-2 shrink-0 pt-3 border-t border-edge">
-          <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2 min-h-0 pt-3 border-t border-edge">
+          <div className="flex items-center justify-between shrink-0">
             <div className="flex items-center gap-1.5 min-w-0">
               <Sparkles size={13} className="text-accent shrink-0" />
               <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-                Suggestions automatiques
+                {t.queuePanel.autoSuggestions}
               </span>
             </div>
             {!jamRole && (
@@ -604,8 +610,8 @@ export function QueuePanel() {
                   setAutoplay(!autoplay);
                   push(
                     !autoplay
-                      ? "Radio automatique activée"
-                      : "Suggestions purgées",
+                      ? t.queuePanel.radioOn
+                      : t.queuePanel.suggestionsCleared,
                     "info"
                   );
                 }}
@@ -624,11 +630,11 @@ export function QueuePanel() {
           {autoRows.length === 0 ? (
             <p className="text-[12px] text-ink-muted py-1">
               {autoplay
-                ? "Les suggestions apparaîtront quand la file se terminera."
-                : "Radio désactivée."}
+                ? t.queuePanel.suggestionsHint
+                : t.queuePanel.radioOff}
             </p>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1 min-h-0 overflow-y-auto pr-0.5">
               {autoRows.map((info) => (
                 <AutoRow
                   key={info.track.id}
@@ -651,8 +657,8 @@ export function QueuePanel() {
           </span>
           <button
             onClick={handlePlaySelected}
-            title="Lire la sélection"
-            aria-label="Lire la sélection"
+            title={t.queuePanel.playSelectionTitle}
+            aria-label={t.queuePanel.playSelectionTitle}
             className="rounded p-1.5 text-ink-soft hover:bg-hover hover:text-white transition-colors"
           >
             <Play size={13} fill="currentColor" />
@@ -660,8 +666,8 @@ export function QueuePanel() {
           {canEdit && (
             <button
               onClick={handleRemoveSelected}
-              title="Retirer la sélection"
-              aria-label="Retirer la sélection"
+              title={t.queuePanel.removeSelectionTitle}
+              aria-label={t.queuePanel.removeSelectionTitle}
               className="rounded p-1.5 text-bad hover:bg-bad/10 transition-colors"
             >
               <Trash2 size={13} />
@@ -672,8 +678,8 @@ export function QueuePanel() {
               const rect = e.currentTarget.getBoundingClientRect();
               setBulkAnchor({ x: rect.left, y: rect.bottom + 4 });
             }}
-            title="Ajouter la sélection à une playlist"
-            aria-label="Ajouter la sélection à une playlist"
+            title={t.queuePanel.addSelectionToPlaylistTitle}
+            aria-label={t.queuePanel.addSelectionToPlaylistTitle}
             className="rounded p-1.5 text-ink-soft hover:bg-hover hover:text-white transition-colors"
           >
             <Save size={13} />
@@ -681,7 +687,7 @@ export function QueuePanel() {
           <span className="flex-1" />
           <button
             onClick={() => setSelected(new Set())}
-            aria-label="Effacer la sélection"
+            aria-label={t.queuePanel.clearSelectionAria}
             className="rounded p-1.5 text-ink-muted hover:bg-hover hover:text-white transition-colors"
           >
             <X size={13} />
@@ -698,7 +704,7 @@ export function QueuePanel() {
             onClose={closeMenu}
             actions={{
               onPlay: () => void playAt(menu.qIndex),
-              playLabel: "Lire ce titre maintenant",
+              playLabel: t.queuePanel.playThisNow,
               onPlayNext: () =>
                 void smartPlayNext(menu.track).then((r) =>
                   toastQueueResult(push, r, menu.track.title)
@@ -707,13 +713,13 @@ export function QueuePanel() {
               onLike: () =>
                 void toggleLike(menu.track).then((ok) =>
                   push(
-                    ok === false ? "Impossible d'aimer" : ok ? "Ajouté aux titres aimés ✓" : "Retiré des titres aimés",
+                    ok === false ? t.common.likeImpossible : ok ? t.common.likeAdded : t.common.likeRemoved,
                     ok === false ? "error" : "success"
                   )
                 ),
               onPromote: menu.isAuto && canEdit ? () => promoteAuto(menu.qIndex) : undefined,
               onRemove: menu.isAuto || canEdit ? () => removeFromQueue(menu.qIndex) : undefined,
-              removeLabel: menu.isAuto ? "Retirer la suggestion" : "Retirer de la file",
+              removeLabel: menu.isAuto ? t.queuePanel.removeSuggestion : t.queuePanel.removeFromQueue,
               showPlaylists: !menu.isAuto,
             }}
           />
@@ -730,22 +736,22 @@ export function QueuePanel() {
                 setCurrentMenuAnchor(null);
                 push(
                   current.album
-                    ? `Album : ${current.album} (page à venir)`
-                    : "Page album — à venir",
+                    ? fmt(t.queuePanel.albumSoon, { album: current.album })
+                    : t.queuePanel.albumPageSoon,
                   "info"
                 );
               }}
             >
-              Aller à l&apos;album
+              {t.queuePanel.goToAlbum}
             </MenuItem>
             <MenuItem
               icon={<User size={14} />}
               onClick={() => {
                 setCurrentMenuAnchor(null);
-                push("Page artiste — à venir", "info");
+                push(t.queuePanel.artistPageSoon, "info");
               }}
             >
-              À l&apos;artiste
+              {t.queuePanel.toArtist}
             </MenuItem>
             <MenuItem
               icon={<Share2 size={14} />}
@@ -753,20 +759,20 @@ export function QueuePanel() {
                 setCurrentMenuAnchor(null);
                 void navigator.clipboard
                   .writeText(current.sourceUrl)
-                  .then(() => push("Lien copié ✓", "success"))
-                  .catch(() => push("Copie impossible", "error"));
+                  .then(() => push(t.common.linkCopied, "success"))
+                  .catch(() => push(t.common.copyFailed, "error"));
               }}
             >
-              Partager le morceau
+              {t.queuePanel.shareTrack}
             </MenuItem>
             <MenuItem
               icon={<Flag size={14} />}
               onClick={() => {
                 setCurrentMenuAnchor(null);
-                push("Signalement pris en compte", "info");
+                push(t.queuePanel.reportOk, "info");
               }}
             >
-              Signaler
+              {t.queuePanel.report}
             </MenuItem>
           </>
         )}
@@ -782,11 +788,10 @@ export function QueuePanel() {
           className="p-3 space-y-2.5 w-64"
         >
           <p className="text-[13px] font-semibold text-white">
-            Sauvegarder en playlist
+            {t.queuePanel.saveAsPlaylist}
           </p>
           <p className="text-[11px] text-ink-muted">
-            {manualRows.length} titre{manualRows.length > 1 ? "s" : ""} ·{" "}
-            {formatDuration(manualTotal)}
+            {fmt(t.queuePanel.countDuration, { n: manualRows.length, s: plural(manualRows.length), duration: formatDuration(manualTotal) })}
           </p>
           <input
             autoFocus={!!saveAnchor}
@@ -800,7 +805,7 @@ export function QueuePanel() {
             disabled={!saveName.trim() || saving || manualRows.length === 0}
             className="w-full rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold py-2 transition-colors disabled:opacity-60"
           >
-            {saving ? "..." : "Sauvegarder"}
+            {saving ? "..." : t.common.save}
           </button>
         </form>
       </Popover>
@@ -818,13 +823,13 @@ export function QueuePanel() {
 
       <ConfirmModal
         open={clearOpen}
-        title={`Vider les ${manualRows.length} titres de la file ?`}
-        description="Les suggestions automatiques ne sont pas affectées."
-        confirmLabel="Vider"
+        title={fmt(t.queuePanel.clearConfirmTitle, { n: manualRows.length })}
+        description={t.queuePanel.clearConfirmDesc}
+        confirmLabel={t.queuePanel.clearConfirm}
         onConfirm={() => {
           clearUpcoming();
           setClearOpen(false);
-          push("File vidée", "info");
+          push(t.queuePanel.queueEmptied, "info");
         }}
         onClose={() => setClearOpen(false)}
       />

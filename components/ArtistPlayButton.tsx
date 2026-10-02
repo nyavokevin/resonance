@@ -7,6 +7,8 @@ import { usePlayer } from "@/lib/player/engine";
 import { useToasts } from "@/lib/toast-store";
 import type { Track } from "@/lib/types";
 import type { SpotifySearchTrack } from "@/lib/providers/spotify-api";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt, plural } from "@/lib/i18n/dictionaries";
 
 /**
  * ▶ sur une page artiste : top titres (search Spotify) → pipeline
@@ -19,6 +21,7 @@ export function ArtistPlayButton({ artistName }: { artistName: string }) {
   const push = useToasts((s) => s.push);
   const playTrack = usePlayer((s) => s.playTrack);
   const [busy, setBusy] = useState(false);
+  const t = useT();
 
   async function resolveOne(t: SpotifySearchTrack): Promise<Track | null> {
     try {
@@ -53,7 +56,7 @@ export function ArtistPlayButton({ artistName }: { artistName: string }) {
       );
       const data = await res.json();
       if (!res.ok || data.source !== "spotify" || !data.tracks?.length) {
-        push("Lecture impossible pour cet artiste.", "error");
+        push(t.search.artistPlayImpossible, "error");
         return;
       }
       const candidates = (data.tracks as SpotifySearchTrack[]).slice(0, 8);
@@ -65,20 +68,20 @@ export function ArtistPlayButton({ artistName }: { artistName: string }) {
         resolved.push(...out.filter((t): t is Track => t !== null));
       }
       if (!resolved.length) {
-        push("Titres illisibles.", "error");
+        push(t.search.titlesUnreadable, "error");
         return;
       }
       await playTrack(resolved[0], resolved);
       const missing = candidates.length - resolved.length;
       push(
         missing > 0
-          ? `Écoute : ${artistName} — ${resolved.length}/${candidates.length} titres résolus (${missing} introuvable${missing > 1 ? "s" : ""} ⚠)`
-          : `Écoute : ${artistName} — ${resolved.length}/${candidates.length} titres résolus ✓`,
+          ? fmt(t.artistPlay.listenStats, { artist: artistName, x: resolved.length, y: candidates.length, missing, s: plural(missing) })
+          : fmt(t.artistPlay.listenStatsOk, { artist: artistName, x: resolved.length, y: candidates.length }),
         missing > 0 ? "info" : "success"
       );
       router.refresh();
     } catch {
-      push("Lecture impossible.", "error");
+      push(t.common.playError, "error");
     } finally {
       setBusy(false);
     }
@@ -91,7 +94,7 @@ export function ArtistPlayButton({ artistName }: { artistName: string }) {
       className="mt-3 inline-flex items-center gap-1.5 px-5 py-2 rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold transition-colors disabled:opacity-50"
     >
       {busy ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
-      <span>{busy ? "Chargement…" : "Écouter"}</span>
+      <span>{busy ? t.common.loading : t.common.listen}</span>
     </button>
   );
 }

@@ -4,9 +4,11 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useT } from "@/lib/i18n/locale-store";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
+  const t = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -45,12 +47,10 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       className="w-full max-w-sm rounded-lg bg-panel p-8 shadow-lg animate-rise-in"
     >
       <h1 className="text-center text-2xl font-semibold text-ink">
-        {mode === "login" ? "Bon retour" : "Créer un compte"}
+        {mode === "login" ? t.auth.welcomeBack : t.auth.createAccount}
       </h1>
       <p className="mt-1 text-center text-sm text-ink-soft">
-        {mode === "login"
-          ? "Content de te revoir ! Connecte-toi."
-          : "Quelques secondes suffisent."}
+        {mode === "login" ? t.auth.welcomeBackSub : t.auth.signupSub}
       </p>
 
       {error && (
@@ -63,7 +63,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       )}
 
       <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
-        Email
+        {t.auth.email}
         <input
           type="email"
           required
@@ -75,7 +75,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       </label>
 
       <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-ink-soft">
-        Mot de passe
+        {t.auth.password}
         <input
           type="password"
           required
@@ -95,23 +95,23 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         {loading
           ? "..."
           : mode === "login"
-            ? "Se connecter"
-            : "S'inscrire"}
+            ? t.auth.loginAction
+            : t.auth.signupAction}
       </button>
 
       <p className="mt-4 text-center text-sm text-ink-soft">
         {mode === "login" ? (
           <>
-            Pas de compte ?{" "}
+            {t.auth.noAccount}{" "}
             <Link href="/signup" className="text-accent hover:underline">
-              S&apos;inscrire
+              {t.auth.signupAction}
             </Link>
           </>
         ) : (
           <>
-            Déjà un compte ?{" "}
+            {t.auth.hasAccount}{" "}
             <Link href="/login" className="text-accent hover:underline">
-              Se connecter
+              {t.auth.loginAction}
             </Link>
           </>
         )}

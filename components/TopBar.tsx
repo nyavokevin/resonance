@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { History, SlidersHorizontal, Download, LogOut, ChevronDown, Radio, ListMusic } from "lucide-react";
+import { History, SlidersHorizontal, Download, LogOut, ChevronDown, Radio, ListMusic, Settings } from "lucide-react";
 import { UrlInput } from "@/components/UrlInput";
 import { createClient } from "@/lib/supabase/client";
 import { useToasts } from "@/lib/toast-store";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt } from "@/lib/i18n/dictionaries";
 import { useJam } from "@/lib/jam-store";
 
 interface TopBarProps {
@@ -17,6 +19,7 @@ interface TopBarProps {
 export function TopBar({ user, onMenu }: TopBarProps) {
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
   const jamSession = useJam((s) => s.session);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -30,7 +33,7 @@ export function TopBar({ user, onMenu }: TopBarProps) {
   }, []);
 
   function comingSoon(label: string) {
-    push(`${label} — bientôt disponible`, "info");
+    push(fmt(t.common.comingSoon, { label }), "info");
   }
 
   async function handleLogout() {
@@ -48,8 +51,8 @@ export function TopBar({ user, onMenu }: TopBarProps) {
         {onMenu && (
           <button
             onClick={onMenu}
-            aria-label="Ouvrir le menu"
-            title="Menu"
+            aria-label={t.topbar.openMenu}
+            title={t.topbar.menu}
             className="lg:hidden w-9 h-9 shrink-0 flex items-center justify-center rounded-card text-ink-soft hover:text-white hover:bg-hover transition-colors"
           >
             <ListMusic size={18} />
@@ -62,7 +65,7 @@ export function TopBar({ user, onMenu }: TopBarProps) {
         <div className="hidden sm:flex items-center gap-1">
           <Link
             href="/jam"
-            title="Jam — écoute ensemble"
+            title={t.topbar.jamTitle}
             className={`w-8 h-8 flex items-center justify-center rounded-card transition-colors ${
               jamSession
                 ? "text-accent bg-accent/15"
@@ -72,22 +75,22 @@ export function TopBar({ user, onMenu }: TopBarProps) {
             <Radio size={17} />
           </Link>
           <button
-            onClick={() => comingSoon("Historique complet")}
-            title="Historique"
+            onClick={() => comingSoon(t.topbar.historySoon)}
+            title={t.topbar.history}
             className="w-8 h-8 flex items-center justify-center rounded-card text-ink-soft hover:text-white hover:bg-hover transition-colors"
           >
             <History size={17} />
           </button>
           <button
-            onClick={() => comingSoon("Égaliseur")}
-            title="Égaliseur"
+            onClick={() => comingSoon(t.topbar.equalizer)}
+            title={t.topbar.equalizer}
             className="w-8 h-8 flex items-center justify-center rounded-card text-ink-soft hover:text-white hover:bg-hover transition-colors"
           >
             <SlidersHorizontal size={17} />
           </button>
           <button
-            onClick={() => comingSoon("Import")}
-            title="Importer"
+            onClick={() => comingSoon(t.topbar.importAction)}
+            title={t.topbar.import}
             className="w-8 h-8 flex items-center justify-center rounded-card text-ink-soft hover:text-white hover:bg-hover transition-colors"
           >
             <Download size={17} />
@@ -115,12 +118,20 @@ export function TopBar({ user, onMenu }: TopBarProps) {
               <p className="px-3 py-2 text-[11px] text-ink-muted truncate border-b border-edge">
                 {user.email}
               </p>
+              <Link
+                href="/settings"
+                onClick={() => setMenuOpen(false)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-ink-soft hover:bg-hover hover:text-white transition-colors text-left"
+              >
+                <Settings size={15} />
+                {t.topbar.settings}
+              </Link>
               <button
                 onClick={() => void handleLogout()}
                 className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-ink-soft hover:bg-hover hover:text-white transition-colors text-left"
               >
                 <LogOut size={15} />
-                Se déconnecter
+                {t.topbar.logout}
               </button>
             </div>
           )}

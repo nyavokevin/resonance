@@ -4,6 +4,7 @@ import { resolveLink } from "@/lib/providers/resolve";
 import { PLATFORM_COLORS, PLATFORM_LABELS, type Platform } from "@/lib/types";
 import { SongActions } from "@/components/SongActions";
 import { formatDuration } from "@/components/TrackList";
+import { getServerDictionary } from "@/lib/i18n/server";
 import { Link2, Music2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,7 @@ export default async function SongPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: rawId } = await params;
+  const { t, locale } = await getServerDictionary();
   const trackId = decodeURIComponent(rawId);
   const parts = trackId.split(":");
   if (parts.length < 3) notFound();
@@ -40,7 +42,7 @@ export default async function SongPage({
   const link = buildLink(platform, platformTrackId);
   if (!link) notFound();
 
-  const result = await resolveLink(link);
+  const result = await resolveLink(link, locale);
   const track = result.tracks[0];
   if (!track) notFound();
 
@@ -57,7 +59,7 @@ export default async function SongPage({
         </div>
         <div className="flex flex-col min-w-0 justify-end gap-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">
-            Morceau
+            {t.song.trackLabel}
           </span>
           <h1 className="font-display text-[26px] font-bold text-white leading-tight break-words">
             {track.title}
@@ -91,7 +93,7 @@ export default async function SongPage({
           className="mt-6 inline-flex items-center gap-1.5 text-[12px] text-ink-muted hover:text-white transition-colors"
         >
           <Link2 size={14} />
-          Ouvrir la source
+          {t.song.openSource}
         </a>
       )}
     </div>

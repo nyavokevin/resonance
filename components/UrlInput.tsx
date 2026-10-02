@@ -20,6 +20,8 @@ import { TrackMenu, anchorFromEvent } from "@/components/TrackMenu";
 import type { PopoverAnchor } from "@/components/Popover";
 import { useSearchStore } from "@/lib/search-store";
 import { searchResultToTrack } from "@/lib/youtube-track";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt } from "@/lib/i18n/dictionaries";
 
 function formatDuration(ms?: number): string {
   if (!ms) return "";
@@ -62,6 +64,7 @@ function SpotifyRow({
   onHover: () => void;
   onActivate: () => void;
 }) {
+  const t = useT();
   const rowClass = `flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150 cursor-pointer ${
     highlighted ? "bg-hover" : ""
   }`;
@@ -69,34 +72,34 @@ function SpotifyRow({
     "flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded bg-base";
 
   if (item.kind === "track") {
-    const t = item.track;
+    const tr = item.track;
     return (
       <li>
         <div onClick={onActivate} onMouseEnter={onHover} className={rowClass}>
           <span className={coverClass}>
-            {t.coverUrl ? (
+            {tr.coverUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={t.coverUrl} alt="" className="h-full w-full object-cover" />
+              <img src={tr.coverUrl} alt="" className="h-full w-full object-cover" />
             ) : (
               <Music2 size={14} className="text-ink-muted" />
             )}
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-medium text-ink">
-              {t.title}
+              {tr.title}
             </span>
             <span className="block truncate text-[12px] text-ink-soft">
-              {t.artists} · {t.album}
+              {tr.artists} · {tr.album}
             </span>
           </span>
-          {t.popularity !== undefined && (
+          {tr.popularity !== undefined && (
             <span className="shrink-0 text-[11px] tabular-nums text-ink-muted">
-              ♬ {t.popularity}
+              ♬ {tr.popularity}
             </span>
           )}
-          {t.durationMs !== undefined && (
+          {tr.durationMs !== undefined && (
             <span className="shrink-0 text-[11px] tabular-nums text-ink-muted">
-              {formatDuration(t.durationMs)}
+              {formatDuration(tr.durationMs)}
             </span>
           )}
           <button
@@ -105,7 +108,7 @@ function SpotifyRow({
               e.stopPropagation();
               onActivate();
             }}
-            aria-label={`Lire ${t.title}`}
+            aria-label={fmt(t.search.playAria, { title: tr.title })}
             className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-opacity hover:bg-accent-hover ${
               highlighted ? "opacity-100" : "opacity-0"
             }`}
@@ -136,7 +139,7 @@ function SpotifyRow({
             </span>
             <span className="block truncate text-[12px] text-ink-soft">
               {a.artist}
-              {a.trackCount !== undefined ? ` · ${a.trackCount} titres` : ""}
+              {a.trackCount !== undefined ? fmt(t.urlInput.tracksSuffix, { n: a.trackCount }) : ""}
               {a.releaseDate ? ` · ${a.releaseDate.slice(0, 4)}` : ""}
             </span>
           </span>
@@ -163,8 +166,8 @@ function SpotifyRow({
               {a.name}
             </span>
             <span className="block truncate text-[12px] text-ink-soft">
-              Artiste
-              {a.followers !== undefined ? ` · ${formatFollowers(a.followers)} abonnés` : ""}
+              {t.search.artist}
+              {a.followers !== undefined ? fmt(t.urlInput.followersSuffix, { n: formatFollowers(a.followers) }) : ""}
             </span>
           </span>
         </div>
@@ -189,8 +192,8 @@ function SpotifyRow({
             {p.name}
           </span>
           <span className="block truncate text-[12px] text-ink-soft">
-            Par {p.owner}
-            {p.trackCount !== undefined ? ` · ${p.trackCount} titres` : ""}
+            {fmt(t.common.byArtist, { owner: p.owner })}
+            {p.trackCount !== undefined ? fmt(t.urlInput.tracksSuffix, { n: p.trackCount }) : ""}
           </span>
         </span>
       </div>
@@ -209,6 +212,7 @@ function SpotifyResultsDropdown({
   onHighlight: (i: number) => void;
   onActivate: (item: FlatItem) => void;
 }) {
+  const t = useT();
   const sections: Array<{
     key: string;
     label: string;
@@ -217,25 +221,25 @@ function SpotifyResultsDropdown({
   }> = [
     {
       key: "tracks",
-      label: "Titres",
+      label: t.urlInput.sectionsTracks,
       icon: <Music2 size={13} />,
       items: groups.tracks.map((track) => ({ kind: "track", track }) as FlatItem),
     },
     {
       key: "albums",
-      label: "Albums",
+      label: t.urlInput.sectionsAlbums,
       icon: <Disc size={13} />,
       items: groups.albums.map((album) => ({ kind: "album", album }) as FlatItem),
     },
     {
       key: "artists",
-      label: "Artistes",
+      label: t.urlInput.sectionsArtists,
       icon: <Mic size={13} />,
       items: groups.artists.map((artist) => ({ kind: "artist", artist }) as FlatItem),
     },
     {
       key: "playlists",
-      label: "Playlists",
+      label: t.urlInput.sectionsPlaylists,
       icon: <Music2 size={13} />,
       items: groups.playlists.map((playlist) => ({
         kind: "playlist",
@@ -249,7 +253,7 @@ function SpotifyResultsDropdown({
     <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-card border border-edge bg-card shadow-xl animate-rise-in">
       <div className="flex items-center justify-between border-b border-edge px-3 py-2">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-          Résultats
+          {t.urlInput.results}
         </p>
         <SpotifyChip />
       </div>
@@ -286,6 +290,7 @@ function SpotifyResultsDropdown({
 export function UrlInput() {
   const playTrack = usePlayer((s) => s.playTrack);
   const push = useToasts((s) => s.push);
+  const t = useT();
   const router = useRouter();
   const setStoreQuery = useSearchStore((s) => s.setQuery);
   const [value, setValue] = useState("");
@@ -393,7 +398,7 @@ export function UrlInput() {
     setOpen(false);
     const track = playResult(result);
     await playTrack(track, [track]);
-    push(`Lecture : ${track.title}`, "success");
+    push(fmt(t.search.playTitle, { title: track.title }), "success");
     setValue(""); setStoreQuery("");
     setResults([]);
   }
@@ -440,7 +445,7 @@ export function UrlInput() {
     }
   }
 
-  async function handleSpotifyTrack(t: SpotifySearchTrack) {
+  async function handleSpotifyTrack(stk: SpotifySearchTrack) {
     setOpen(false);
     setSearching(true);
     try {
@@ -449,22 +454,22 @@ export function UrlInput() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           platform: "spotify",
-          trackId: t.spotifyId,
-          isrc: t.isrc,
-          title: t.title,
-          artist: t.artists,
-          durationMs: t.durationMs,
-          album: t.album,
-          coverUrl: t.coverUrl,
+          trackId: stk.spotifyId,
+          isrc: stk.isrc,
+          title: stk.title,
+          artist: stk.artists,
+          durationMs: stk.durationMs,
+          album: stk.album,
+          coverUrl: stk.coverUrl,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       const track = data.track as Track;
       await playTrack(track, [track]);
-      push(`Lecture : ${track.title}`, "success");
+      push(fmt(t.search.playTitle, { title: track.title }), "success");
     } catch {
-      push("Titre illisible.", "error");
+      push(t.common.unreadableTitle, "error");
     } finally {
       setSearching(false);
     }
@@ -480,14 +485,14 @@ export function UrlInput() {
           body: JSON.stringify({ url }),
         });
         const data = await res.json();
-        if (!res.ok) return { ok: false, error: data.error ?? "Lien illisible." };
+        if (!res.ok) return { ok: false, error: data.error ?? t.common.unreadableLink };
         return { ok: true, data };
       } catch {
-        if (attempt === 1) return { ok: false, error: "Serveur injoignable. Le serveur tourne-t-il ?" };
+        if (attempt === 1) return { ok: false, error: t.urlInput.serverUnreachable };
         await new Promise((r) => setTimeout(r, 800));
       }
     }
-    return { ok: false, error: "Erreur réseau." };
+    return { ok: false, error: t.common.networkError };
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -508,7 +513,7 @@ export function UrlInput() {
       try {
         await fetchSearch(value.trim());
       } catch {
-        push("Recherche indisponible.", "error");
+        push(t.search.searchUnavailable, "error");
       } finally {
         setSearching(false);
       }
@@ -519,7 +524,7 @@ export function UrlInput() {
     try {
       const result = await resolveUrl(value.trim());
       if (!result.ok || !result.data) {
-        push(result.error ?? "Lien illisible.", "error");
+        push(result.error ?? t.common.unreadableLink, "error");
         return;
       }
 
@@ -527,8 +532,8 @@ export function UrlInput() {
       await playTrack(tracks[0], tracks);
       push(
         result.data.kind === "track" || result.data.kind === "direct"
-          ? `Lecture : ${tracks[0].title}`
-          : `Collection ajoutée : ${result.data.collectionTitle}`,
+          ? fmt(t.search.playTitle, { title: tracks[0].title })
+          : fmt(t.search.collectionAdded, { title: result.data.collectionTitle ?? "" }),
         "success"
       );
       setValue(""); setStoreQuery("");
@@ -568,7 +573,7 @@ export function UrlInput() {
             onFocus={() => {
               if (results.length > 0 || flatItems().length > 0) setOpen(true);
             }}
-            placeholder="Colle un lien Spotify, YouTube, Apple Music ou MP3…"
+            placeholder={t.urlInput.pastePlaceholder}
             className="w-full h-9 rounded-card border border-edge bg-base pl-9 pr-24 text-[13px] text-white placeholder:text-ink-muted outline-none transition-colors duration-150 focus:border-accent"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -581,7 +586,7 @@ export function UrlInput() {
               </span>
             ) : (
               <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-card text-ink-soft border border-edge">
-                Auto-Detect
+                {t.urlInput.autoDetect}
               </span>
             )}
           </div>
@@ -605,7 +610,7 @@ export function UrlInput() {
       {open && results.length > 0 && (
         <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-card border border-edge bg-card shadow-xl animate-rise-in">
           <p className="border-b border-edge px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-            Résultats YouTube
+            {t.urlInput.youtubeResults}
           </p>
           <ul className="max-h-[340px] overflow-y-auto">
             {results.map((r, i) => (
@@ -648,7 +653,7 @@ export function UrlInput() {
                       e.stopPropagation();
                       void handlePlay(r);
                     }}
-                    aria-label={`Lire ${r.title}`}
+                    aria-label={fmt(t.search.playAria, { title: r.title })}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-white opacity-0 transition-opacity hover:bg-accent-hover group-hover/list:opacity-100 data-[hl=true]:opacity-100"
                     data-hl={i === highlight}
                   >
@@ -661,7 +666,7 @@ export function UrlInput() {
                       setMenuResult(r);
                       setMenuAnchor(anchorFromEvent(e));
                     }}
-                    aria-label={`Options pour ${r.title}`}
+                    aria-label={fmt(t.search.optionsAria, { title: r.title })}
                     className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-muted opacity-0 transition-opacity hover:bg-hover hover:text-white group-hover/list:opacity-100 data-[hl=true]:opacity-100"
                     data-hl={i === highlight}
                   >
@@ -683,7 +688,7 @@ export function UrlInput() {
           }}
           actions={{
             onPlay: () => void handlePlay(menuResult),
-            playLabel: "Lire",
+            playLabel: t.search.playLabel,
             onPlayNext: () => {
               const track = playResult(menuResult);
               void smartPlayNext(track).then((result) =>

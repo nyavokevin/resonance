@@ -10,6 +10,8 @@ import { useToasts } from "@/lib/toast-store";
 import { PLATFORM_LABELS, type Track } from "@/lib/types";
 import { TrackMenu, anchorFromEvent } from "@/components/TrackMenu";
 import type { PopoverAnchor } from "@/components/Popover";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt } from "@/lib/i18n/dictionaries";
 
 export function formatDuration(ms?: number): string {
   if (!ms) return "--:--";
@@ -37,6 +39,7 @@ function useTrackMenu(tracks: Track[]) {
   const playTrack = usePlayer((s) => s.playTrack);
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
   const [menuTrack, setMenuTrack] = useState<Track | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<PopoverAnchor | null>(null);
 
@@ -69,7 +72,7 @@ function useTrackMenu(tracks: Track[]) {
           onPlay: () => {
             void playTrack(track, tracks).then(() => router.refresh());
           },
-          playLabel: "Lire",
+          playLabel: t.common.play,
           onPlayNext: () =>
             void smartPlayNext(track).then((result) =>
               toastQueueResult(push, result, track.title)
@@ -79,10 +82,10 @@ function useTrackMenu(tracks: Track[]) {
             void toggleLike(track).then((ok) =>
               push(
                 ok === false
-                  ? "Impossible d'aimer"
+                  ? t.common.likeImpossible
                   : ok
-                    ? "Ajouté aux titres aimés ✓"
-                    : "Retiré des titres aimés",
+                    ? t.common.likeAdded
+                    : t.common.likeRemoved,
                 ok === false ? "error" : "success"
               )
             ),
@@ -97,13 +100,13 @@ function useTrackMenu(tracks: Track[]) {
 export function RecentGrid({ tracks }: { tracks: Track[] }) {
   const playTrack = usePlayer((s) => s.playTrack);
   const router = useRouter();
+  const t = useT();
   const { openMenu, menu, menuTrack } = useTrackMenu(tracks);
 
   if (tracks.length === 0) {
     return (
       <p className="text-[13px] text-ink-muted">
-        Rien ici pour l&apos;instant. Colle un lien ou cherche un titre en haut
-        pour commencer.
+        {t.trackList.emptyHint}
       </p>
     );
   }
@@ -127,19 +130,16 @@ export function RecentGrid({ tracks }: { tracks: Track[] }) {
               <span className="text-ink-muted text-[12px] truncate">
                 {track.artist}
               </span>
-              <span className="text-[10px] text-ink-muted uppercase mt-0.5 font-medium">
-                {PLATFORM_LABELS[track.platform]}
-              </span>
             </div>
           </div>
           <button
-            aria-label={`Lire ${track.title}`}
+            aria-label={fmt(t.search.playAria, { title: track.title })}
             className="w-8 h-8 rounded-full bg-accent hover:bg-accent-hover text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow mr-1 shrink-0"
           >
             <Play size={16} fill="currentColor" />
           </button>
           <button
-            aria-label={`Options pour ${track.title}`}
+            aria-label={fmt(t.search.optionsAria, { title: track.title })}
             onClick={(e) => openMenu(e, track)}
             className="w-7 h-7 rounded-full text-ink-muted flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-hover hover:text-white shrink-0"
           >
@@ -155,6 +155,7 @@ export function RecentGrid({ tracks }: { tracks: Track[] }) {
 export function TrendRows({ tracks }: { tracks: Track[] }) {
   const playTrack = usePlayer((s) => s.playTrack);
   const router = useRouter();
+  const t = useT();
   const { openMenu, menu, menuTrack } = useTrackMenu(tracks);
 
   if (tracks.length === 0) return null;
@@ -184,14 +185,11 @@ export function TrendRows({ tracks }: { tracks: Track[] }) {
             </div>
           </div>
           <div className="flex items-center gap-4 shrink-0">
-            <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-panel text-ink-muted border border-edge">
-              {PLATFORM_LABELS[track.platform]}
-            </span>
             <span className="text-ink-muted text-[12px] font-mono">
               {formatDuration(track.durationMs)}
             </span>
             <button
-              aria-label={`Options pour ${track.title}`}
+              aria-label={fmt(t.search.optionsAria, { title: track.title })}
               className="text-ink-muted hover:text-white p-1 transition-colors"
               onClick={(e) => openMenu(e, track)}
             >
@@ -205,16 +203,31 @@ export function TrendRows({ tracks }: { tracks: Track[] }) {
   );
 }
 
-export function TrackRows({ tracks }: { tracks: Track[] }) {
+export function TrackRows({
+  tracks,
+  scrollable = false,
+  maxHeightClassName = "max-h-[calc(100vh-340px)]",
+}: {
+  tracks: Track[];
+  scrollable?: boolean;
+  maxHeightClassName?: string;
+}) {
   const playTrack = usePlayer((s) => s.playTrack);
   const currentTrack = usePlayer((s) => s.currentTrack());
+  const t = useT();
   const { openMenu, menu, menuTrack } = useTrackMenu(tracks);
 
   return (
-    <div className="rounded-card bg-card border border-edge divide-y divide-edge overflow-hidden">
+    <div
+      className={`rounded-card bg-card border border-edge divide-y divide-edge ${
+        scrollable
+          ? `overflow-y-auto overflow-x-hidden min-h-[120px] ${maxHeightClassName}`
+          : "overflow-hidden"
+      }`}
+    >
       {tracks.length === 0 ? (
         <p className="px-3 py-6 text-center text-[13px] text-ink-muted">
-          Aucun titre aimé pour l&apos;instant.
+          {t.trackList.noLiked}
         </p>
       ) : (
         tracks.map((track, i) => {
@@ -248,14 +261,11 @@ export function TrackRows({ tracks }: { tracks: Track[] }) {
                 </div>
               </div>
               <div className="flex items-center gap-4 shrink-0">
-                <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-panel text-ink-muted border border-edge">
-                  {PLATFORM_LABELS[track.platform]}
-                </span>
                 <span className="text-ink-muted text-[12px] font-mono">
                   {formatDuration(track.durationMs)}
                 </span>
                 <button
-                  aria-label={`Options pour ${track.title}`}
+                  aria-label={fmt(t.search.optionsAria, { title: track.title })}
                   className="text-ink-muted hover:text-white p-1 transition-colors"
                   onClick={(e) => openMenu(e, track)}
                 >

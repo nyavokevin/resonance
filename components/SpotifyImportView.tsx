@@ -14,6 +14,8 @@ import { useToasts } from "@/lib/toast-store";
 import { createPlaylist, addTracksToPlaylist } from "@/lib/playlists";
 import type { Track } from "@/lib/types";
 import { PLATFORM_COLORS } from "@/lib/types";
+import { useT, useLocale } from "@/lib/i18n/locale-store";
+import { fmt, plural } from "@/lib/i18n/dictionaries";
 
 type ItemStatus = "pending" | "resolving" | "youtube" | "spotify" | "failed";
 
@@ -74,6 +76,7 @@ async function resolveOne(
 }
 
 function StatusBadge({ status }: { status: ItemStatus }) {
+  const t = useT();
   if (status === "youtube") {
     return (
       <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-ok">
@@ -94,7 +97,7 @@ function StatusBadge({ status }: { status: ItemStatus }) {
     return (
       <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-bad">
         <AlertTriangle size={13} />
-        Introuvable
+        {t.importView.notFound}
       </span>
     );
   }
@@ -121,6 +124,8 @@ export function SpotifyImportView({
 }) {
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
+  const locale = useLocale();
   const [phase, setPhase] = useState<"loading" | "resolving" | "done" | "error">(
     "loading"
   );
@@ -146,7 +151,7 @@ export function SpotifyImportView({
         enumerated = data as EnumerateResponse;
       } catch {
         if (!alive()) return;
-        setError("Collection Spotify introuvable.");
+        setError(t.importView.collectionNotFound);
         setPhase("error");
         return;
       }
@@ -196,7 +201,7 @@ export function SpotifyImportView({
       if (!alive()) return;
       setPhase("done");
     })();
-  }, [collectionId, kind, nonce]);
+  }, [collectionId, kind, nonce, t.importView.collectionNotFound]);
 
   const done = items.filter(
     (it) => it.status === "youtube" || it.status === "spotify" || it.status === "failed"
@@ -208,14 +213,22 @@ export function SpotifyImportView({
   );
 
   /** Récapitulatif de résolution : "12/12 ✓" ou "11/12 (1 introuvable ⚠)". */
-  function recapToast(verb: string) {
+  function recapToast(action: "import" | "queue") {
     const total = items.length;
     const okCount = includedTracks.length;
     const missing = total - okCount;
-    const label = `${kind === "album" ? "Album" : "Playlist"} « ${title} » ${verb} — ${okCount}/${total} titre${total > 1 ? "s" : ""} résolu${okCount > 1 ? "s" : ""}`;
+    const kindLabel = kind === "album" ? t.importView.albumImport : t.importView.playlistImport;
+    const verb = action === "import"
+      ? locale === "en" ? "imported" : "importée"
+      : locale === "en" ? "added" : "ajoutée";
+    const trackWord = locale === "en"
+      ? `track${plural(total)} resolved`
+      : `titre${plural(total)} résolu${plural(okCount)}`;
+    const label = `${kindLabel} « ${title} » ${verb} — ${okCount}/${total} ${trackWord}`;
+    const missingWord = locale === "en" ? "missing" : "introuvable";
     push(
       missing > 0
-        ? `${label} (${missing} introuvable${missing > 1 ? "s" : ""} ⚠)`
+        ? `${label} (${missing} ${missingWord}${locale === "fr" ? plural(missing) : ""} ⚠)`
         : `${label} ✓`,
       missing > 0 ? "info" : "success"
     );
@@ -230,11 +243,11 @@ export function SpotifyImportView({
       if (!row) throw new Error();
       const ok = await addTracksToPlaylist(row.id, tracks);
       if (!ok) throw new Error();
-      recapToast("importée");
+      recapToast("import");
       router.refresh();
       router.push(`/playlist/${row.id}`);
     } catch {
-      push("Import impossible.", "error");
+      push(t.importView.importImpossible, "error");
     } finally {
       setImporting(false);
     }
@@ -244,15 +257,15 @@ export function SpotifyImportView({
     const tracks = includedTracks.map((it) => it.track!);
     if (!tracks.length || listening) return;
     setListening(true);
-    for (const t of tracks) {
-      const r = await smartAddToQueue(t);
+    for (const tr of tracks) {
+      const r = await smartAddToQueue(tr);
       if (r === "failed") {
-        push("Ajout impossible.", "error");
+        push(t.common.addImpossible, "error");
         break;
       }
     }
     usePlayer.getState().setQueueOpen(true);
-    recapToast("ajoutée");
+    recapToast("queue");
     setListening(false);
   }
 
@@ -262,7 +275,7 @@ export function SpotifyImportView({
         <AlertTriangle size={28} className="mx-auto text-bad" />
         <h1 className="mt-3 text-[16px] font-semibold text-white">{error}</h1>
         <p className="mt-1 text-[13px] text-ink-soft">
-          Vérifie le lien ou réessaie dans un moment.
+          {t.importView.checkLink}
         </p>
         <button
           onClick={() => {
@@ -272,7 +285,7 @@ export function SpotifyImportView({
           }}
           className="mt-5 rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold px-4 py-2 transition-colors"
         >
-          Réessayer
+          {t.common.retry}
         </button>
       </div>
     );
@@ -292,7 +305,7 @@ export function SpotifyImportView({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">
-              {kind === "album" ? "Album" : "Playlist"} · Import
+              {(kind === "album" ? t.importView.albumImport : t.importView.playlistImport) + " " + t.importView.importSuffix}
             </p>
             <span
               className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded text-white"
@@ -309,10 +322,10 @@ export function SpotifyImportView({
           )}
           <p className="mt-0.5 text-[12px] text-ink-muted">
             {items.length > 0
-              ? `${items.length} piste${items.length > 1 ? "s" : ""} détectée${items.length > 1 ? "s" : ""}`
+              ? fmt(t.importView.tracksDetected, { n: items.length, s: plural(items.length) })
               : trackCount
-                ? `${trackCount} pistes annoncées · détection…`
-                : "Détection des pistes…"}
+                ? fmt(t.importView.tracksAnnounced, { n: trackCount })
+                : t.importView.detecting}
           </p>
         </div>
       </div>
@@ -321,7 +334,7 @@ export function SpotifyImportView({
         <div className="mt-4">
           <div className="flex items-center justify-between text-[12px] text-ink-soft">
             <span>
-              Résolution {done}/{items.length}
+              {fmt(t.importView.resolving, { done, total: items.length })}
             </span>
             <span className="tabular-nums">
               {Math.round((done / items.length) * 100)}%
@@ -342,14 +355,14 @@ export function SpotifyImportView({
           disabled={phase !== "done" || includedTracks.length === 0 || importing}
           className="rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold px-4 py-2 transition-colors disabled:opacity-50"
         >
-          {importing ? "Import…" : "Importer comme playlist"}
+          {importing ? t.importView.importing : t.importView.importAsPlaylist}
         </button>
         <button
           onClick={() => void handleListen()}
           disabled={phase !== "done" || includedTracks.length === 0 || listening}
           className="rounded-card border border-edge bg-panel hover:bg-hover text-white text-[12px] font-medium px-4 py-2 transition-colors disabled:opacity-50"
         >
-          {listening ? "Ajout…" : "Écouter"}
+          {listening ? t.importView.adding : t.common.listen}
         </button>
         <label className="ml-auto flex cursor-pointer items-center gap-2 text-[12px] text-ink-soft">
           <button
@@ -366,15 +379,17 @@ export function SpotifyImportView({
               }`}
             />
           </button>
-          Exclure les introuvables
+          {t.importView.excludeMissing}
         </label>
       </div>
 
       {failed.length > 0 && (
         <p className="mt-2 text-[12px] text-warn">
-          {failed.length} titre{failed.length > 1 ? "s" : ""} introuvable
-          {failed.length > 1 ? "s" : ""}
-          {excludeMissing ? " (exclus)" : ""}.
+          {excludeMissing
+            ? fmt(t.importView.missingExcluded, { n: failed.length, s: plural(failed.length) })
+            : locale === "en"
+              ? `${failed.length} missing track${plural(failed.length)}.`
+              : `${failed.length} titre${plural(failed.length)} introuvable${plural(failed.length)}.`}
         </p>
       )}
 
@@ -400,7 +415,7 @@ export function SpotifyImportView({
         ))}
         {phase === "loading" && (
           <li className="px-3 py-6 text-center text-[13px] text-ink-muted">
-            Détection des pistes…
+            {t.importView.detecting}
           </li>
         )}
       </ul>

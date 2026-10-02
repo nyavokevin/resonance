@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/client";
 import { JAM_STORAGE_KEY, type JamParticipant, type JamPlaybackState, type JamSession, type JamTrackMeta } from "@/lib/jam-store";
 import type { Track } from "@/lib/types";
+import { dictionaries } from "@/lib/i18n/dictionaries";
+import { useLocaleStore } from "@/lib/i18n/locale-store";
 
 export interface JamSessionRow {
   id: string;
@@ -42,12 +44,12 @@ export async function createJamSession(
     .select("*")
     .single();
   if (error) {
+    const t = dictionaries[useLocaleStore.getState().locale].jamErrors;
     let message = error.message;
     if (error.code === "42703" || message.includes("column")) {
-      message =
-        "Colonnes manquantes — ré-exécute supabase/schema.sql dans le SQL Editor.";
+      message = t.missingColumns;
     } else if (error.code === "42501") {
-      message = "Permission refusée (RLS) — es-tu bien connecté ?";
+      message = t.rlsDenied;
     }
     return { session: null, error: message };
   }
@@ -142,7 +144,9 @@ export async function fetchParticipants(
     const profile = row.profiles as { display_name?: string } | null;
     return {
       id: row.user_id,
-      name: profile?.display_name ?? "Invité",
+      name:
+        profile?.display_name ??
+        (useLocaleStore.getState().locale === "en" ? "Guest" : "Invité"),
     };
   });
 }
@@ -285,7 +289,9 @@ export function subscribeJam(
         if (metas.length > 0) {
           participants.push({
             id: key,
-            name: metas[0].name ?? "Invité",
+            name:
+              metas[0].name ??
+              (useLocaleStore.getState().locale === "en" ? "Guest" : "Invité"),
             track: metas[0].track ?? null,
           });
         }

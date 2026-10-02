@@ -5,10 +5,8 @@ import {
   Heart,
   Home,
   Search,
+  Settings,
   Sparkles,
-  Album,
-  User,
-  Folder,
   ListMusic,
   ListPlus,
   Play,
@@ -21,6 +19,8 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useToasts } from "@/lib/toast-store";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt } from "@/lib/i18n/dictionaries";
 import { usePlayer } from "@/lib/player/engine";
 import type { PlaylistSummaryServer } from "@/lib/library-server";
 import {
@@ -29,6 +29,8 @@ import {
   duplicatePlaylist,
   deletePlaylist,
   fetchPlaylistDetail,
+  getSharedPlaylist,
+  saveSharedPlaylist,
 } from "@/lib/playlists";
 import { Popover, MenuItem, type PopoverAnchor } from "@/components/Popover";
 import { ConfirmModal } from "@/components/Modal";
@@ -52,6 +54,7 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
   const playTrack = usePlayer((s) => s.playTrack);
 
   // Ferme le drawer mobile à chaque navigation.
@@ -63,6 +66,8 @@ export function Sidebar({
   const [createAnchor, setCreateAnchor] = useState<PopoverAnchor | null>(null);
   const [createName, setCreateName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [importing, setImporting] = useState(false);
   const [menuPlaylistId, setMenuPlaylistId] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<PopoverAnchor | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -71,7 +76,7 @@ export function Sidebar({
   const [deleting, setDeleting] = useState(false);
 
   function comingSoon(label: string) {
-    push(`${label} — bientôt disponible`, "info");
+    push(fmt(t.common.comingSoon, { label }), "info");
   }
 
   async function handleCreate(e?: React.FormEvent) {
@@ -82,12 +87,48 @@ export function Sidebar({
     const row = await createPlaylist(name);
     setCreating(false);
     if (!row) {
-      push("Création impossible", "error");
+      push(t.common.createImpossible, "error");
       return;
     }
     setCreateName("");
     setCreateAnchor(null);
-    push(`Playlist « ${row.name} » créée ✓`, "success");
+    push(fmt(t.sidebar.playlistCreated, { name: row.name }), "success");
+    router.refresh();
+    router.push(`/playlist/${row.id}`);
+  }
+
+  async function handleImport(e?: React.FormEvent) {
+    e?.preventDefault();
+    const raw = importUrl.trim();
+    if (!raw || importing) return;
+    const urlMatch = raw.match(/\/playlist\/share\/([A-Za-z0-9_-]+)/);
+    const token =
+      urlMatch?.[1] ??
+      (/^[A-Za-z0-9_-]{6,}$/.test(raw) ? raw : null);
+    if (!token) {
+      push(t.sidebar.importInvalid, "error");
+      return;
+    }
+    setImporting(true);
+    const shared = await getSharedPlaylist(token);
+    if (!shared) {
+      setImporting(false);
+      push(t.sidebar.importNotFound, "error");
+      return;
+    }
+    const row = await saveSharedPlaylist(
+      shared.playlist.name,
+      shared.playlist.description ?? "",
+      shared.tracks.map((r) => r.track)
+    );
+    setImporting(false);
+    if (!row) {
+      push(t.common.createImpossible, "error");
+      return;
+    }
+    setImportUrl("");
+    setCreateAnchor(null);
+    push(t.share.playlistSaved, "success");
     router.refresh();
     router.push(`/playlist/${row.id}`);
   }
@@ -95,12 +136,12 @@ export function Sidebar({
   async function handlePlay(id: string) {
     const detail = await fetchPlaylistDetail(id);
     if (!detail || !detail.tracks.length) {
-      push("Playlist vide", "info");
+      push(t.sidebar.playlistEmpty, "info");
       return;
     }
     const tracks = detail.tracks.map((t) => t.track);
     await playTrack(tracks[0], tracks);
-    push(`Lecture : ${detail.name}`, "success");
+    push(fmt(t.sidebar.playing, { name: detail.name }), "success");
   }
 
   async function handleRename(id: string) {
@@ -112,10 +153,10 @@ export function Sidebar({
     const ok = await updatePlaylist(id, { name });
     setRenamingId(null);
     if (!ok) {
-      push("Renommage impossible", "error");
+      push(t.sidebar.renameImpossible, "error");
       return;
     }
-    push("Playlist renommée ✓", "success");
+    push(t.sidebar.playlistRenamed, "success");
     router.refresh();
   }
 
@@ -124,10 +165,10 @@ export function Sidebar({
     setMenuAnchor(null);
     const row = await duplicatePlaylist(id);
     if (!row) {
-      push("Duplication impossible", "error");
+      push(t.sidebar.duplicateImpossible, "error");
       return;
     }
-    push(`Playlist dupliquée ✓`, "success");
+    push(t.sidebar.playlistDuplicated, "success");
     router.refresh();
     router.push(`/playlist/${row.id}`);
   }
@@ -139,11 +180,11 @@ export function Sidebar({
     const ok = await deletePlaylist(deleteId);
     setDeleting(false);
     if (!ok) {
-      push("Suppression impossible", "error");
+      push(t.sidebar.deleteImpossible, "error");
       return;
     }
     setDeleteId(null);
-    push(`Playlist « ${playlist?.name ?? ""} » supprimée`, "success");
+    push(fmt(t.sidebar.playlistDeleted, { name: playlist?.name ?? "" }), "success");
     if (pathname === `/playlist/${deleteId}`) router.push("/");
     router.refresh();
   }
@@ -162,7 +203,7 @@ export function Sidebar({
         />
       )}
       <aside
-        aria-label="Navigation principale"
+        aria-label={t.nav.mainNav}
         className={`fixed top-0 bottom-[90px] lg:bottom-0 left-0 z-[70] w-[220px] bg-panel border-r border-edge flex flex-col justify-between overflow-y-auto pb-[env(safe-area-inset-bottom)] transition-transform duration-200 ease-out lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -188,7 +229,7 @@ export function Sidebar({
             }`}
           >
             <Home size={18} className="text-accent" />
-            <span>Accueil</span>
+            <span>{t.nav.home}</span>
           </Link>
           <Link
             href="/discover"
@@ -200,7 +241,7 @@ export function Sidebar({
             }`}
           >
             <Sparkles size={18} className="text-accent" />
-            <span>Découvrir</span>
+            <span>{t.nav.discover}</span>
           </Link>
           <Link
             href="/search"
@@ -212,13 +253,25 @@ export function Sidebar({
             }`}
           >
             <Search size={18} />
-            <span>Rechercher</span>
+            <span>{t.nav.search}</span>
+          </Link>
+          <Link
+            href="/settings"
+            aria-current={pathname === "/settings" ? "page" : undefined}
+            className={`flex items-center gap-3 px-3 py-2 rounded-card transition-colors text-[13px] ${
+              pathname === "/settings"
+                ? "bg-hover text-white font-medium"
+                : "text-ink-soft hover:bg-hover hover:text-white"
+            }`}
+          >
+            <Settings size={18} />
+            <span>{t.nav.settings}</span>
           </Link>
         </nav>
 
         <div className="px-4 pt-4 pb-1.5 flex items-center justify-between">
           <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-            Playlists
+            {t.sidebar.playlists}
           </span>
           <div className="flex items-center gap-1">
             {playlists.length > 0 && (
@@ -231,8 +284,8 @@ export function Sidebar({
                 setCreateName("");
                 setCreateAnchor(anchorFromEvent(e));
               }}
-              aria-label="Créer une playlist"
-              title="Créer une playlist"
+              aria-label={t.sidebar.createPlaylistAria}
+              title={t.sidebar.createPlaylistAria}
               className="rounded p-1 text-ink-muted hover:bg-hover hover:text-white transition-colors"
             >
               <Plus size={15} />
@@ -242,7 +295,7 @@ export function Sidebar({
         <div className="px-2 space-y-0.5">
           {playlists.length === 0 ? (
             <p className="px-3 py-1.5 text-[12px] text-ink-muted">
-              Aucune playlist pour l&apos;instant.
+              {t.sidebar.noPlaylists}
             </p>
           ) : (
             playlists.map((p) => {
@@ -293,7 +346,7 @@ export function Sidebar({
                       e.stopPropagation();
                       void handlePlay(p.id);
                     }}
-                    aria-label={`Lire ${p.name}`}
+                    aria-label={fmt(t.sidebar.playAria, { name: p.name })}
                     className="shrink-0 rounded-full p-1 text-ink-soft opacity-0 group-hover:opacity-100 hover:text-accent transition"
                   >
                     <Play size={13} fill="currentColor" />
@@ -304,7 +357,7 @@ export function Sidebar({
                       setMenuPlaylistId(p.id);
                       setMenuAnchor(anchorFromEvent(e));
                     }}
-                    aria-label={`Options de ${p.name}`}
+                    aria-label={fmt(t.sidebar.optionsAria, { name: p.name })}
                     className="shrink-0 rounded p-1 text-ink-muted opacity-0 group-hover:opacity-100 hover:text-white transition"
                   >
                     <MoreHorizontal size={14} />
@@ -317,7 +370,7 @@ export function Sidebar({
 
         <div className="px-4 pt-4 pb-1.5 flex items-center justify-between">
           <span className="text-[11px] font-semibold text-ink-muted uppercase tracking-wider">
-            Bibliothèque
+            {t.sidebar.library}
           </span>
         </div>
         <div className="px-2 space-y-0.5 pb-4">
@@ -327,7 +380,7 @@ export function Sidebar({
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <Heart size={16} className="text-accent" fill={pathname === "/liked" ? "currentColor" : "none"} />
-              <span className="truncate text-[13px]">Titres likés</span>
+              <span className="truncate text-[13px]">{t.sidebar.likedTitles}</span>
             </div>
             {likedCount > 0 && (
               <span className="text-[11px] px-1.5 py-0.2 rounded-[6px] bg-card text-ink-muted font-mono group-hover:text-ink-soft">
@@ -335,31 +388,21 @@ export function Sidebar({
               </span>
             )}
           </Link>
-          <button
-            onClick={() => comingSoon("Albums sauvegardés")}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-card text-ink-soft hover:bg-hover hover:text-white transition-colors"
-          >
-            <Album size={16} className="text-ink-muted" />
-            <span className="truncate text-[13px]">Albums sauvegardés</span>
-          </button>
-          <button
-            onClick={() => comingSoon("Artistes suivis")}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-card text-ink-soft hover:bg-hover hover:text-white transition-colors"
-          >
-            <User size={16} className="text-ink-muted" />
-            <span className="truncate text-[13px]">Artistes suivis</span>
-          </button>
-          <button
-            onClick={() => comingSoon("Fichiers locaux")}
-            className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-card text-ink-soft hover:bg-hover hover:text-white transition-colors"
-          >
-            <Folder size={16} className="text-ink-muted" />
-            <span className="truncate text-[13px]">Fichiers locaux</span>
-          </button>
         </div>
       </div>
 
-      <div className="p-3 border-t border-edge">
+      <div className="p-3 border-t border-edge space-y-2">
+        <Link
+          href="/settings"
+          className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-card transition-colors text-[13px] ${
+            pathname === "/settings"
+              ? "bg-hover text-white"
+              : "text-ink-soft hover:bg-hover hover:text-white"
+          }`}
+        >
+          <Settings size={16} className="text-ink-muted" />
+          <span className="truncate">{t.nav.settings}</span>
+        </Link>
         <button
           onClick={(e) => {
             setCreateName("");
@@ -368,18 +411,18 @@ export function Sidebar({
           className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-card border border-edge bg-card hover:bg-hover text-white text-[12px] font-medium transition-colors"
         >
           <ListPlus size={16} />
-          <span>Créer une playlist</span>
+          <span>{t.sidebar.createPlaylist}</span>
         </button>
       </div>
 
       <Popover anchor={createAnchor} onClose={() => setCreateAnchor(null)}>
         <form onSubmit={(e) => void handleCreate(e)} className="p-3 space-y-2.5">
-          <p className="text-[13px] font-semibold text-white">Nouvelle playlist</p>
+          <p className="text-[13px] font-semibold text-white">{t.sidebar.newPlaylist}</p>
           <input
             autoFocus={!!createAnchor}
             value={createName}
             onChange={(e) => setCreateName(e.target.value)}
-            placeholder="Nom de la playlist"
+            placeholder={t.sidebar.playlistNamePlaceholder}
             maxLength={80}
             className="w-full rounded-card border border-edge bg-base px-2.5 py-1.5 text-[13px] text-white placeholder:text-ink-muted outline-none focus:border-accent transition-colors"
           />
@@ -388,7 +431,27 @@ export function Sidebar({
             disabled={!createName.trim() || creating}
             className="w-full rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold py-2 transition-colors disabled:opacity-60"
           >
-            {creating ? "..." : "Créer"}
+            {creating ? "..." : t.common.create}
+          </button>
+        </form>
+        <form
+          onSubmit={(e) => void handleImport(e)}
+          className="p-3 space-y-2.5 border-t border-edge"
+        >
+          <p className="text-[13px] font-semibold text-white">{t.sidebar.importTitle}</p>
+          <input
+            value={importUrl}
+            onChange={(e) => setImportUrl(e.target.value)}
+            placeholder={t.sidebar.importPlaceholder}
+            inputMode="url"
+            className="w-full rounded-card border border-edge bg-base px-2.5 py-1.5 text-[13px] text-white placeholder:text-ink-muted outline-none focus:border-accent transition-colors"
+          />
+          <button
+            type="submit"
+            disabled={!importUrl.trim() || importing}
+            className="w-full rounded-card border border-edge bg-card hover:bg-hover text-white text-[12px] font-semibold py-2 transition-colors disabled:opacity-60"
+          >
+            {importing ? t.sidebar.importingAction : t.sidebar.importAction}
           </button>
         </form>
       </Popover>
@@ -410,7 +473,7 @@ export function Sidebar({
                 void handlePlay(menuPlaylist.id);
               }}
             >
-              Lire
+              {t.common.play}
             </MenuItem>
             <MenuItem
               icon={<Pencil size={14} />}
@@ -421,13 +484,13 @@ export function Sidebar({
                 setMenuPlaylistId(null);
               }}
             >
-              Renommer
+              {t.sidebar.rename}
             </MenuItem>
             <MenuItem
               icon={<Copy size={14} />}
               onClick={() => void handleDuplicate(menuPlaylist.id)}
             >
-              Dupliquer
+              {t.sidebar.duplicate}
             </MenuItem>
             <MenuItem
               icon={<Trash2 size={14} />}
@@ -438,7 +501,7 @@ export function Sidebar({
                 setMenuPlaylistId(null);
               }}
             >
-              Supprimer
+              {t.sidebar.delete}
             </MenuItem>
           </>
         )}
@@ -446,9 +509,9 @@ export function Sidebar({
 
       <ConfirmModal
         open={deleteId !== null}
-        title={`Supprimer définitivement « ${deletePlaylistRow?.name ?? ""} » ?`}
-        description="Cette action est irréversible."
-        confirmLabel="Supprimer"
+        title={fmt(t.sidebar.deleteTitle, { name: deletePlaylistRow?.name ?? "" })}
+        description={t.sidebar.deleteDescription}
+        confirmLabel={t.common.delete}
         loading={deleting}
         onConfirm={() => void handleDelete()}
         onClose={() => {

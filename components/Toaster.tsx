@@ -2,6 +2,7 @@
 
 import { CheckCircle2, CircleAlert, Info, X } from "lucide-react";
 import { useToasts, type ToastItem } from "@/lib/toast-store";
+import { useT } from "@/lib/i18n/locale-store";
 
 const ICONS: Record<ToastItem["type"], typeof Info> = {
   info: Info,
@@ -17,6 +18,7 @@ const COLORS: Record<ToastItem["type"], string> = {
 
 function Toast({ toast }: { toast: ToastItem }) {
   const dismiss = useToasts((s) => s.dismiss);
+  const t = useT();
   const Icon = ICONS[toast.type];
   return (
     <div
@@ -28,7 +30,7 @@ function Toast({ toast }: { toast: ToastItem }) {
       <button
         onClick={() => dismiss(toast.id)}
         className="ml-2 text-ink-muted transition-colors duration-150 hover:text-ink"
-        aria-label="Fermer"
+        aria-label={t.common.close}
       >
         <X size={14} />
       </button>

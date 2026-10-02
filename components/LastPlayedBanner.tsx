@@ -7,16 +7,19 @@ import { smartAddToQueue, toastQueueResult } from "@/lib/smartAddToQueue";
 import { useToasts } from "@/lib/toast-store";
 import { PLATFORM_LABELS, type Track } from "@/lib/types";
 import { formatDuration } from "@/components/TrackList";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt } from "@/lib/i18n/dictionaries";
 
 export function LastPlayedBanner({ track }: { track: Track }) {
   const playTrack = usePlayer((s) => s.playTrack);
   const setQueueOpen = usePlayer((s) => s.setQueueOpen);
   const push = useToasts((s) => s.push);
   const router = useRouter();
+  const t = useT();
 
   function handlePlay() {
     void playTrack(track, [track]).then(() => router.refresh());
-    push(`Lecture : ${track.title}`, "success");
+    push(fmt(t.search.playTitle, { title: track.title }), "success");
   }
 
   function handleAdd() {
@@ -32,10 +35,10 @@ export function LastPlayedBanner({ track }: { track: Track }) {
         <div className="flex items-center gap-2">
           <span className="px-2 py-0.5 rounded-[6px] bg-panel border border-edge text-ok text-[11px] font-semibold tracking-wide flex items-center gap-1">
             <CheckCircle2 size={13} />
-            Dernière écoute
+            {t.lastPlayed.lastListen}
           </span>
           <span className="text-ink-muted text-[11px]">
-            {PLATFORM_LABELS[track.platform]}
+            {track.platform === "direct" ? t.types.fileLabel : PLATFORM_LABELS[track.platform]}
           </span>
         </div>
         <h2 className="font-display text-[16px] text-white font-semibold">
@@ -55,14 +58,14 @@ export function LastPlayedBanner({ track }: { track: Track }) {
           className="px-3.5 py-2 rounded-card bg-panel hover:bg-hover border border-edge text-white text-[12px] font-medium flex items-center gap-1.5 transition-colors"
         >
           <ListPlus size={15} />
-          <span>Ajouter</span>
+          <span>{t.common.add}</span>
         </button>
         <button
           onClick={handlePlay}
           className="px-4 py-2 rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold flex items-center gap-1.5 transition-colors"
         >
           <Play size={15} fill="currentColor" />
-          <span>Écouter</span>
+          <span>{t.common.listen}</span>
         </button>
       </div>
     </section>

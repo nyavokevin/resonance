@@ -13,15 +13,8 @@ import type {
   SpotifyCategoryPlaylist,
   SpotifyNewRelease,
 } from "@/lib/providers/spotify-api";
-
-const MOODS = [
-  { name: "Énergie", query: "workout energy hits", icon: Flame, color: "#E8843C" },
-  { name: "Chill", query: "chill ambient relax", icon: Moon, color: "#5865F2" },
-  { name: "Sport", query: "sport motivation", icon: Dumbbell, color: "#D14343" },
-  { name: "Mélancolie", query: "melancholic sad songs", icon: CloudRain, color: "#80848E" },
-  { name: "Party", query: "party dance hits", icon: PartyPopper, color: "#E8618C" },
-  { name: "Focus", query: "focus deep work", icon: BookOpen, color: "#23A55A" },
-];
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt, plural, type Dictionary } from "@/lib/i18n/dictionaries";
 
 /* Tuiles catégories : palette sombre discord-compatible, couleur
  * dérivée du nom (stable entre les visites). */
@@ -91,12 +84,12 @@ function CategoryTile({ category }: { category: SpotifyCategory }) {
 
 const sectionTitle = "font-display text-[16px] font-semibold text-white tracking-tight";
 
-function contextualGreeting(hour: number): { title: string; subtitle: string } {
-  if (hour < 6) return { title: "Découvrir", subtitle: "Pour finir la nuit en douceur…" };
-  if (hour < 12) return { title: "Découvrir", subtitle: "Pour bien démarrer la journée…" };
-  if (hour < 18) return { title: "Découvrir", subtitle: "Pour accompagner ton après-midi…" };
-  if (hour < 22) return { title: "Découvrir", subtitle: "Pour bien finir la soirée…" };
-  return { title: "Découvrir", subtitle: "Pour finir la nuit en douceur…" };
+function contextualGreeting(hour: number, t: Dictionary): { title: string; subtitle: string } {
+  if (hour < 6) return { title: t.discover.title, subtitle: t.discover.subtitleNight };
+  if (hour < 12) return { title: t.discover.title, subtitle: t.discover.subtitleMorning };
+  if (hour < 18) return { title: t.discover.title, subtitle: t.discover.subtitleAfternoon };
+  if (hour < 22) return { title: t.discover.title, subtitle: t.discover.subtitleEvening };
+  return { title: t.discover.title, subtitle: t.discover.subtitleNight };
 }
 
 export function DiscoverView({
@@ -118,6 +111,7 @@ export function DiscoverView({
 }) {
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
   const playTrack = usePlayer((s) => s.playTrack);
   const [busyMix, setBusyMix] = useState<string | null>(null);
   const [radioTracks, setRadioTracks] = useState<Track[] | null>(null);
@@ -125,9 +119,18 @@ export function DiscoverView({
   const [refreshing, setRefreshing] = useState(false);
 
   const hour = new Date().getHours();
-  const { title: heroTitle, subtitle: heroSubtitle } = contextualGreeting(hour);
+  const { title: heroTitle, subtitle: heroSubtitle } = contextualGreeting(hour, t);
   const lastTrack = recent[0];
   const hasHistory = topArtists.length > 0;
+
+  const moods = [
+    { name: t.discover.moodsEnergy, query: "workout energy hits", icon: Flame, color: "#E8843C" },
+    { name: t.discover.moodsChill, query: "chill ambient relax", icon: Moon, color: "#5865F2" },
+    { name: t.discover.moodsSport, query: "sport motivation", icon: Dumbbell, color: "#D14343" },
+    { name: t.discover.moodsMelancholy, query: "melancholic sad songs", icon: CloudRain, color: "#80848E" },
+    { name: t.discover.moodsParty, query: "party dance hits", icon: PartyPopper, color: "#E8618C" },
+    { name: t.discover.moodsFocus, query: "focus deep work", icon: BookOpen, color: "#23A55A" },
+  ];
 
   const genreMixes = categories.slice(0, 6);
 
@@ -192,7 +195,7 @@ export function DiscoverView({
       }
       return resolved.length > 0 ? resolved : null;
     } catch {
-      push("Mix indisponible", "error");
+      push(t.discover.mixUnavailable, "error");
       return null;
     } finally {
       setBusyMix(null);
@@ -220,8 +223,8 @@ export function DiscoverView({
     const missing = total - tracks.length;
     push(
       missing > 0
-        ? `${label} — ${tracks.length}/${total} titres résolus (${missing} introuvable${missing > 1 ? "s" : ""} ⚠)`
-        : `${label} lancé : ${tracks.length}/${total} titres résolus ✓`,
+        ? fmt(t.discover.mixResolved, { label, x: tracks.length, total, missing, s: plural(missing) })
+        : fmt(t.discover.mixLaunched, { label, x: tracks.length, total }),
       missing > 0 ? "info" : "success"
     );
     router.refresh();
@@ -245,7 +248,7 @@ export function DiscoverView({
       }
       setRadioTracks(tracks.slice(0, 10));
     } catch {
-      push("Suggestions indisponibles", "info");
+      push(t.discover.suggestionsUnavailable, "info");
       setRadioTracks([]);
     } finally {
       setRadioLoading(false);
@@ -279,14 +282,14 @@ export function DiscoverView({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-card bg-panel border border-edge text-ink-soft hover:text-white hover:bg-hover text-[12px] font-medium transition-colors w-fit disabled:opacity-60"
         >
           <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-          Actualiser
+          {t.discover.refresh}
         </button>
       </section>
 
       {/* Grille des catégories (cœur de la page) */}
       {categories.length > 0 && (
         <section className="space-y-3">
-          <h2 className={sectionTitle}>Explorer par genre</h2>
+          <h2 className={sectionTitle}>{t.discover.exploreByGenre}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {categories.map((c) => (
               <CategoryTile key={c.id} category={c} />
@@ -298,7 +301,7 @@ export function DiscoverView({
       {/* Sélection du moment (featured-playlists) */}
       {featured.length > 0 && (
         <section className="space-y-3">
-          <h2 className={sectionTitle}>🎯 Sélection du moment</h2>
+          <h2 className={sectionTitle}>{t.discover.pickOfMoment}</h2>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {featured.map((p) => (
               <div
@@ -319,7 +322,7 @@ export function DiscoverView({
                 </p>
                 <p className="truncate text-[11px] text-ink-muted">
                   {p.owner}
-                  {p.trackCount ? ` · ${p.trackCount} titres` : ""}
+                  {p.trackCount ? fmt(t.discover.tracksSuffix, { n: p.trackCount }) : ""}
                 </p>
                 <span className="mt-1.5 inline-block text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded bg-ok/15 text-ok border border-ok/30">
                   Spotify
@@ -333,7 +336,7 @@ export function DiscoverView({
       {/* Nouveautés albums (new-releases) */}
       {newReleases.length > 0 && (
         <section className="space-y-3">
-          <h2 className={sectionTitle}>🆕 Nouveautés albums</h2>
+          <h2 className={sectionTitle}>{t.discover.newAlbums}</h2>
           <div className="flex gap-3 overflow-x-auto pb-2">
             {newReleases.map((a) => (
               <div
@@ -365,42 +368,45 @@ export function DiscoverView({
       {/* Mix par genre (6 catégories les plus populaires) */}
       {genreMixes.length > 0 && (
         <section className="space-y-3">
-          <h2 className={sectionTitle}>🎭 Mix par genre</h2>
+          <h2 className={sectionTitle}>{t.discover.mixByGenre}</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {genreMixes.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => void playMix(`Mix ${c.name}`, c.name)}
-                disabled={busyMix !== null}
-                className="group relative overflow-hidden rounded-card p-4 text-left text-white transition-transform duration-150 hover:scale-[1.02] disabled:opacity-60"
-                style={{ background: tileColor(c.name) }}
-              >
-                {c.iconUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={c.iconUrl}
-                    alt=""
-                    loading="lazy"
-                    className="absolute -bottom-2 right-0 h-16 w-16 rotate-[25deg] rounded-[6px] object-cover opacity-90"
-                  />
-                ) : (
-                  <span className="absolute -bottom-3 right-1 rotate-[25deg] text-[52px] leading-none opacity-80">
-                    {fallbackEmoji(c.name)}
-                  </span>
-                )}
-                <span className="relative z-10 flex items-center gap-2 font-display text-[15px] font-bold">
-                  {busyMix === `Mix ${c.name}` ? (
-                    <Loader2 size={16} className="animate-spin" />
+            {genreMixes.map((c) => {
+              const mixLabel = fmt(t.discover.mixName, { name: c.name });
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => void playMix(mixLabel, c.name)}
+                  disabled={busyMix !== null}
+                  className="group relative overflow-hidden rounded-card p-4 text-left text-white transition-transform duration-150 hover:scale-[1.02] disabled:opacity-60"
+                  style={{ background: tileColor(c.name) }}
+                >
+                  {c.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={c.iconUrl}
+                      alt=""
+                      loading="lazy"
+                      className="absolute -bottom-2 right-0 h-16 w-16 rotate-[25deg] rounded-[6px] object-cover opacity-90"
+                    />
                   ) : (
-                    <Play size={16} fill="currentColor" />
+                    <span className="absolute -bottom-3 right-1 rotate-[25deg] text-[52px] leading-none opacity-80">
+                      {fallbackEmoji(c.name)}
+                    </span>
                   )}
-                  Mix {c.name}
-                </span>
-                <span className="relative z-10 mt-0.5 block text-[12px] text-white/70">
-                  30 pistes générées, résolues une par une
-                </span>
-              </button>
-            ))}
+                  <span className="relative z-10 flex items-center gap-2 font-display text-[15px] font-bold">
+                    {busyMix === mixLabel ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Play size={16} fill="currentColor" />
+                    )}
+                    {mixLabel}
+                  </span>
+                  <span className="relative z-10 mt-0.5 block text-[12px] text-white/70">
+                    {t.discover.mixGenerated}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
@@ -409,8 +415,7 @@ export function DiscoverView({
       {hasHistory && lastTrack && (
         <section className="space-y-3" onMouseEnter={() => void loadRadioRail()}>
           <h2 className={sectionTitle}>
-            Parce que tu écoutes {topArtists.slice(0, 3).join(", ")}
-            {topArtists.length > 3 ? "…" : ""}
+            {fmt(t.discover.becauseYouListen, { artists: topArtists.slice(0, 3).join(", ") })}
           </h2>
           {radioLoading && (
             <div className="flex gap-3 overflow-hidden">
@@ -421,19 +426,19 @@ export function DiscoverView({
           )}
           {!radioLoading && radioTracks && radioTracks.length > 0 && (
             <div className="flex gap-3 overflow-x-auto pb-2">
-              {radioTracks.map((t) => (
+              {radioTracks.map((rt) => (
                 <div
-                  key={t.id}
+                  key={rt.id}
                   onClick={() => {
-                    void playTrack(t, radioTracks).then(() => router.refresh());
+                    void playTrack(rt, radioTracks).then(() => router.refresh());
                   }}
                   className="group w-[150px] shrink-0 rounded-card bg-card hover:bg-hover border border-edge p-2.5 cursor-pointer transition-colors"
                 >
                   <div className="relative">
                     <span className="flex aspect-square items-center justify-center overflow-hidden rounded-card bg-base">
-                      {t.coverUrl ? (
+                      {rt.coverUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={t.coverUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        <img src={rt.coverUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
                       ) : (
                         <Music2 size={20} className="text-ink-muted" />
                       )}
@@ -441,20 +446,20 @@ export function DiscoverView({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        void smartAddToQueue(t).then((r) => toastQueueResult(push, r, t.title));
+                        void smartAddToQueue(rt).then((r) => toastQueueResult(push, r, rt.title));
                       }}
-                      aria-label={`Ajouter ${t.title} à la file`}
+                      aria-label={fmt(t.discover.addToQueueAria, { title: rt.title })}
                       className="absolute bottom-1.5 right-1.5 flex h-8 w-8 items-center justify-center rounded-full bg-accent hover:bg-accent-hover text-white opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <Plus size={14} />
                     </button>
                   </div>
                   <p className="mt-2 truncate text-[12px] font-medium text-ink group-hover:text-accent transition-colors">
-                    {t.title}
+                    {rt.title}
                   </p>
                   <p className="truncate text-[11px] text-ink-muted">
-                    {t.artist}
-                    {t.auto ? " · AUTO" : ""}
+                    {rt.artist}
+                    {rt.auto ? " · AUTO" : ""}
                   </p>
                 </div>
               ))}
@@ -466,7 +471,7 @@ export function DiscoverView({
       {/* Tendances locales (données internes) */}
       {globalTrending.length > 0 && (
         <section className="space-y-3">
-          <h2 className={sectionTitle}>🔥 Tendances locales</h2>
+          <h2 className={sectionTitle}>{t.discover.localTrends}</h2>
           <div className="rounded-card bg-card border border-edge divide-y divide-edge overflow-hidden">
             {globalTrending.map((track, i) => (
               <div
@@ -513,9 +518,9 @@ export function DiscoverView({
       {/* Réécoute tes classiques */}
       {forgotten.length > 0 && (
         <section className="space-y-3">
-          <h2 className={sectionTitle}>Réécoute tes classiques</h2>
+          <h2 className={sectionTitle}>{t.discover.replayClassics}</h2>
           <p className="text-[12px] text-ink-muted">
-            On dirait que tu as oublié ces perles ♥
+            {t.discover.forgottenGems}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {forgotten.slice(0, 6).map((track) => (
@@ -550,9 +555,9 @@ export function DiscoverView({
 
       {/* Ambiances */}
       <section className="space-y-3">
-        <h2 className={sectionTitle}>Ambiances</h2>
+        <h2 className={sectionTitle}>{t.discover.vibes}</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {MOODS.map((m) => (
+          {moods.map((m) => (
             <button
               key={m.name}
               onClick={() => router.push(`/search?q=${encodeURIComponent(m.query)}`)}
@@ -570,7 +575,7 @@ export function DiscoverView({
         <div className="rounded-card border border-edge bg-card p-6 text-center">
           <Sparkles size={22} className="mx-auto text-accent" />
           <p className="mt-2 text-[13px] text-ink-soft">
-            Écoute quelques titres pour des suggestions personnalisées.
+            {t.discover.listenForSuggestions}
           </p>
         </div>
       )}

@@ -30,16 +30,20 @@ import type { SearchResult } from "@/lib/providers/search";
 import { TrackMenu, anchorFromEvent } from "@/components/TrackMenu";
 import { Skeleton } from "@/components/Skeleton";
 import type { PopoverAnchor } from "@/components/Popover";
+import { useT } from "@/lib/i18n/locale-store";
+import { fmt, plural, type Dictionary } from "@/lib/i18n/dictionaries";
 
 type Filter = "all" | "track" | "artist" | "album" | "playlist";
 
-const FILTERS: Array<{ key: Filter; label: string }> = [
-  { key: "all", label: "Tout" },
-  { key: "track", label: "Titres" },
-  { key: "artist", label: "Artistes" },
-  { key: "album", label: "Albums" },
-  { key: "playlist", label: "Playlists" },
-];
+function getFilters(t: Dictionary): Array<{ key: Filter; label: string }> {
+  return [
+    { key: "all", label: t.search.filtersAll },
+    { key: "track", label: t.search.filtersTracks },
+    { key: "artist", label: t.search.filtersArtists },
+    { key: "album", label: t.search.filtersAlbums },
+    { key: "playlist", label: t.search.filtersPlaylists },
+  ];
+}
 
 function PlatformBadge({ platform }: { platform: Platform }) {
   return (
@@ -63,6 +67,7 @@ function TrackRow({
   onPlay: () => void;
   onMenu: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
+  const t = useT();
   return (
     <div
       onClick={onPlay}
@@ -74,7 +79,7 @@ function TrackRow({
             {String(index + 1).padStart(2, "0")}
           </span>
           <button
-            aria-label={`Lire ${track.title}`}
+            aria-label={fmt(t.search.playAria, { title: track.title })}
             onClick={(e) => {
               e.stopPropagation();
               onPlay();
@@ -105,7 +110,7 @@ function TrackRow({
           {track.durationMs ? formatMs(track.durationMs) : ""}
         </span>
         <button
-          aria-label={`Options pour ${track.title}`}
+          aria-label={fmt(t.search.optionsAria, { title: track.title })}
           onClick={(e) => {
             e.stopPropagation();
             onMenu(e);
@@ -174,6 +179,8 @@ function Rail({ children }: { children: React.ReactNode }) {
 export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQuery?: string }) {
   const router = useRouter();
   const push = useToasts((s) => s.push);
+  const t = useT();
+  const filters = getFilters(t);
   const playTrack = usePlayer((s) => s.playTrack);
   const storeQuery = useSearchStore((s) => s.query);
   const setStoreQuery = useSearchStore((s) => s.setQuery);
@@ -248,12 +255,12 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
         rememberSearch(q);
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
-        push("Recherche indisponible.", "error");
+        push(t.search.searchUnavailable, "error");
       } finally {
         setLoading(false);
       }
     },
-    [push, rememberSearch]
+    [push, rememberSearch, t]
   );
 
   // Recherche débounce 400ms sur la requête partagée (header + page).
@@ -286,20 +293,20 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
     };
   }, [storeQuery, filter, runSearch]);
 
-  async function resolveSpotifyTrack(t: SpotifySearchTrack): Promise<Track | null> {
+  async function resolveSpotifyTrack(s: SpotifySearchTrack): Promise<Track | null> {
     try {
       const res = await fetch("/api/resolve-track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           platform: "spotify",
-          trackId: t.spotifyId,
-          isrc: t.isrc,
-          title: t.title,
-          artist: t.artists,
-          durationMs: t.durationMs,
-          album: t.album,
-          coverUrl: t.coverUrl,
+          trackId: s.spotifyId,
+          isrc: s.isrc,
+          title: s.title,
+          artist: s.artists,
+          durationMs: s.durationMs,
+          album: s.album,
+          coverUrl: s.coverUrl,
         }),
       });
       const data = await res.json();
@@ -310,14 +317,14 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
     }
   }
 
-  async function handleSpotifyTrack(t: SpotifySearchTrack) {
-    const track = await resolveSpotifyTrack(t);
+  async function handleSpotifyTrack(s: SpotifySearchTrack) {
+    const track = await resolveSpotifyTrack(s);
     if (!track) {
-      push("Titre illisible.", "error");
+      push(t.common.unreadableTitle, "error");
       return;
     }
     await playTrack(track, [track]);
-    push(`Lecture : ${track.title}`, "success");
+    push(fmt(t.search.playTitle, { title: track.title }), "success");
   }
 
   /** ▶ sur un artiste : top titres (search) → pipeline de résolution → lecture. */
@@ -328,7 +335,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
       );
       const data = await res.json();
       if (!res.ok || data.source !== "spotify" || !data.tracks?.length) {
-        push("Lecture impossible pour cet artiste.", "error");
+        push(t.search.artistPlayImpossible, "error");
         return;
       }
       const candidates = (data.tracks as SpotifySearchTrack[]).slice(0, 6);
@@ -339,33 +346,33 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
         resolved.push(...out.filter((t): t is Track => t !== null));
       }
       if (!resolved.length) {
-        push("Titres illisibles.", "error");
+        push(t.search.titlesUnreadable, "error");
         return;
       }
       await playTrack(resolved[0], resolved);
       const missing = candidates.length - resolved.length;
       push(
         missing > 0
-          ? `Mix ${a.name} — ${resolved.length}/${candidates.length} titres résolus (${missing} introuvable${missing > 1 ? "s" : ""} ⚠)`
-          : `Mix ${a.name} — ${resolved.length}/${candidates.length} titres résolus ✓`,
+          ? fmt(t.search.mixResolved, { name: a.name, x: resolved.length, y: candidates.length, missing, s: plural(missing) })
+          : fmt(t.search.mixOk, { name: a.name, x: resolved.length, y: candidates.length }),
         missing > 0 ? "info" : "success"
       );
       router.refresh();
     } catch {
-      push("Lecture impossible.", "error");
+      push(t.common.playError, "error");
     }
   }
 
   function handleShare(track: Track) {
     const url = track.sourceUrl;
     if (!url) {
-      push("Rien à partager.", "error");
+      push(t.search.nothingToShare, "error");
       return;
     }
     void navigator.clipboard
       .writeText(url)
-      .then(() => push("Lien copié ✓", "success"))
-      .catch(() => push("Copie impossible", "error"));
+      .then(() => push(t.common.linkCopied, "success"))
+      .catch(() => push(t.common.copyFailed, "error"));
   }
 
   /** 3 requêtes proches quand aucun résultat (variantes de la query). */
@@ -383,7 +390,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
   function handleYtPlay(result: SearchResult) {
     const track = searchResultToTrack(result);
     void playTrack(track, [track]).then(() => router.refresh());
-    push(`Lecture : ${track.title}`, "success");
+    push(fmt(t.search.playTitle, { title: track.title }), "success");
   }
 
   function handleUrlDetected() {
@@ -398,19 +405,19 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
         });
         const data = await res.json();
         if (!res.ok) {
-          push(data.error ?? "Lien illisible.", "error");
+          push(data.error ?? t.common.unreadableLink, "error");
           return;
         }
         const tracks = data.tracks as Track[];
         await playTrack(tracks[0], tracks);
         push(
           data.kind === "track" || data.kind === "direct"
-            ? `Lecture : ${tracks[0].title}`
-            : `Collection ajoutée : ${data.collectionTitle}`,
+            ? fmt(t.search.playTitle, { title: tracks[0].title })
+            : fmt(t.search.collectionAdded, { title: data.collectionTitle }),
           "success"
         );
       } catch {
-        push("Erreur réseau.", "error");
+        push(t.common.networkError, "error");
       }
     })();
   }
@@ -422,7 +429,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
       router.push(`/import/spotify/${detected.id}?type=${detected.kind}`);
       return;
     }
-    push("Import : colle ce lien sur la page d'accueil.", "info");
+    push(t.search.importHint, "info");
   }
 
   const detected = detectLink(storeQuery);
@@ -449,7 +456,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
           onPlay: () => {
             void playTrack(menuTrack, menuListRef.current).then(() => router.refresh());
           },
-          playLabel: "Lire",
+          playLabel: t.search.playLabel,
           onPlayNext: () =>
             void smartPlayNext(menuTrack).then((r) =>
               toastQueueResult(push, r, menuTrack.title)
@@ -462,7 +469,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
           onLike: () =>
             void toggleLike(menuTrack).then((ok) =>
               push(
-                ok === false ? "Impossible d'aimer" : ok ? "Ajouté aux titres aimés ✓" : "Retiré des titres aimés",
+                ok === false ? t.common.likeImpossible : ok ? t.common.likeAdded : t.common.likeRemoved,
                 ok === false ? "error" : "success"
               )
             ),
@@ -492,13 +499,13 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
             onKeyDown={(e) => {
               if (e.key === "Escape") setStoreQuery("");
             }}
-            placeholder="Titres, artistes, albums, playlists ou colle un lien Spotify / YouTube…"
+            placeholder={t.search.searchPlaceholder}
             className="w-full h-12 rounded-card border border-edge bg-card pl-11 pr-10 text-[14px] text-white placeholder:text-ink-muted outline-none transition-colors duration-150 focus:border-accent"
           />
           {storeQuery && (
             <button
               onClick={() => setStoreQuery("")}
-              aria-label="Effacer"
+              aria-label={t.search.clear}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-white transition-colors"
             >
               <X size={16} />
@@ -519,7 +526,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                 </button>
                 <button
                   onClick={() => removeHistory(h.query)}
-                  aria-label={`Effacer ${h.query}`}
+                  aria-label={fmt(t.search.clearQuery, { query: h.query })}
                   className="text-ink-muted hover:text-bad transition-colors"
                 >
                   <X size={12} />
@@ -531,7 +538,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
               className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-ink-muted hover:text-white transition-colors"
             >
               <Trash2 size={12} />
-              Tout effacer
+              {t.search.clearAll}
             </button>
           </div>
         )}
@@ -539,7 +546,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
         {/* Pills filtres */}
         {searched && (
           <div className="sticky top-[72px] z-20 mt-3 flex gap-1.5 overflow-x-auto py-1.5 bg-base/95 backdrop-blur">
-            {FILTERS.map((f) => (
+            {filters.map((f) => (
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
@@ -568,13 +575,13 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
               onClick={handleUrlDetected}
               className="rounded-card bg-accent hover:bg-accent-hover text-white text-[12px] font-semibold px-4 py-2 transition-colors"
             >
-              Écouter
+              {t.search.listenAction}
             </button>
             <button
               onClick={handleImportDetected}
               className="rounded-card border border-edge bg-panel hover:bg-hover text-white text-[12px] font-medium px-4 py-2 transition-colors"
             >
-              Importer
+              {t.search.importAction}
             </button>
           </div>
         </section>
@@ -592,13 +599,13 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
 
       {!loading && !query && (
         <div className="max-w-4xl">
-          <h2 className={sectionTitleClass}>Recherches récentes</h2>
+          <h2 className={sectionTitleClass}>{t.search.recentSearches}</h2>
           {history.length === 0 ? (
             <p className="mt-2 text-[13px] text-ink-muted">
-              Tape un titre, un artiste, ou colle un lien pour commencer.
+              {t.search.typeToStart}
             </p>
           ) : null}
-          <h2 className={`${sectionTitleClass} mt-6`}>Titres écoutés récemment</h2>
+          <h2 className={`${sectionTitleClass} mt-6`}>{t.search.recentlyPlayed}</h2>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {recent.slice(0, 6).map((track) => (
               <div
@@ -636,10 +643,10 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
         <div className="max-w-md mx-auto text-center py-12">
           <SearchX size={36} className="mx-auto text-ink-muted" />
           <p className="mt-3 text-[15px] font-semibold text-white">
-            Aucun résultat pour « {query} »
+            {fmt(t.search.noResults, { query })}
           </p>
           <p className="mt-1 text-[13px] text-ink-soft">
-            Vérifie l&apos;orthographe ou essaie une de ces recherches :
+            {t.search.checkSpelling}
           </p>
           <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
             {suggestQueries(query).map((s) => (
@@ -656,7 +663,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
             onClick={() => void runSearch(query, { source: "youtube" })}
             className="mt-4 rounded-card border border-edge bg-panel hover:bg-hover text-white text-[12px] font-medium px-4 py-2 transition-colors"
           >
-            Réessayer sur YouTube
+            {t.search.retryYoutube}
           </button>
         </div>
       )}
@@ -675,7 +682,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                 if (topArtist) {
                   return (
                     <section>
-                      <h2 className={sectionTitleClass}>Meilleur résultat</h2>
+                      <h2 className={sectionTitleClass}>{t.search.bestResult}</h2>
                       <div
                         onClick={() => router.push(`/artist/spotify/${topArtist.id}`)}
                         className="mt-3 flex items-center gap-4 rounded-card bg-card hover:bg-hover border border-edge p-4 transition-colors cursor-pointer w-full max-w-[380px] min-h-[140px]"
@@ -692,10 +699,10 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                           <span className="block truncate text-[16px] font-bold text-white">
                             {topArtist.name}
                           </span>
-                          <span className="block text-[12px] text-ink-soft">Artiste</span>
+                          <span className="block text-[12px] text-ink-soft">{t.search.artist}</span>
                         </span>
                         <button
-                          aria-label={`Écouter ${topArtist.name}`}
+                          aria-label={fmt(t.search.listenAria, { name: topArtist.name })}
                           onClick={(e) => {
                             e.stopPropagation();
                             void handleArtistPlay(topArtist);
@@ -713,7 +720,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                 const cover = topSpotifyTrack ? topSpotifyTrack.coverUrl : topYt!.thumbnail;
                 return (
                   <section>
-                    <h2 className={sectionTitleClass}>Meilleur résultat</h2>
+                    <h2 className={sectionTitleClass}>{t.search.bestResult}</h2>
                     <div className="mt-3 flex items-center gap-4 rounded-card bg-card hover:bg-hover border border-edge p-4 transition-colors cursor-pointer w-full max-w-[380px] min-h-[140px]"
                       onClick={() =>
                         topSpotifyTrack
@@ -734,7 +741,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                           {title}
                         </span>
                         <span className="block truncate text-[12px] text-ink-soft">
-                          {artist} · Titre
+                          {fmt(t.search.artistTitleSuffix, { artist })}
                         </span>
                       </span>
                       <span className="shrink-0 rounded-full bg-accent p-3 text-white shadow">
@@ -749,32 +756,32 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
               {(spotify?.tracks.length ?? 0) > 0 && (
                 <section>
                   <div className="flex items-center justify-between">
-                    <h2 className={sectionTitleClass}>Titres</h2>
+                    <h2 className={sectionTitleClass}>{t.search.filtersTracks}</h2>
                     <button onClick={() => setFilter("track")} className={seeAllClass}>
-                      Tout voir →
+                      {t.search.seeAll}
                     </button>
                   </div>
                   <div className="mt-2 rounded-card bg-card border border-edge divide-y divide-edge overflow-hidden">
-                    {spotify!.tracks.slice(0, 4).map((t, i) => (
+                    {spotify!.tracks.slice(0, 4).map((stk, i) => (
                       <TrackRow
-                        key={t.spotifyId}
+                        key={stk.spotifyId}
                         index={i}
                         track={{
-                          id: `spotify:track:${t.spotifyId}`,
+                          id: `spotify:track:${stk.spotifyId}`,
                           platform: "spotify",
-                          platformTrackId: t.spotifyId,
-                          title: t.title,
-                          artist: t.artists,
-                          coverUrl: t.coverUrl,
-                          sourceUrl: `https://open.spotify.com/track/${t.spotifyId}`,
-                          durationMs: t.durationMs,
+                          platformTrackId: stk.spotifyId,
+                          title: stk.title,
+                          artist: stk.artists,
+                          coverUrl: stk.coverUrl,
+                          sourceUrl: `https://open.spotify.com/track/${stk.spotifyId}`,
+                          durationMs: stk.durationMs,
                         }}
-                        onPlay={() => void handleSpotifyTrack(t)}
+                        onPlay={() => void handleSpotifyTrack(stk)}
                         onMenu={(e) => {
                           e.stopPropagation();
-                          void resolveSpotifyTrack(t).then((resolved) => {
+                          void resolveSpotifyTrack(stk).then((resolved) => {
                             if (!resolved) {
-                              push("Titre illisible.", "error");
+                              push(t.common.unreadableTitle, "error");
                               return;
                             }
                             menuListRef.current = [resolved]; setMenuTrack(resolved);
@@ -789,7 +796,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
 
               {(ytResults.length > 0) && (
                 <section>
-                  <h2 className={sectionTitleClass}>Titres (YouTube)</h2>
+                  <h2 className={sectionTitleClass}>{t.search.youtubeTracks}</h2>
                   <div className="mt-2 rounded-card bg-card border border-edge divide-y divide-edge overflow-hidden">
                     {ytResults.slice(0, 4).map((r, i) => (
                       <TrackRow
@@ -812,9 +819,9 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
               {(spotify?.artists.length ?? 0) > 0 && (
                 <section>
                   <div className="flex items-center justify-between">
-                    <h2 className={sectionTitleClass}>Artistes</h2>
+                    <h2 className={sectionTitleClass}>{t.search.filtersArtists}</h2>
                     <button onClick={() => setFilter("artist")} className={seeAllClass}>
-                      Tout voir →
+                      {t.search.seeAll}
                     </button>
                   </div>
                   <Rail>
@@ -824,7 +831,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                         round
                         image={a.imageUrl}
                         title={a.name}
-                        subtitle="Artiste"
+                        subtitle={t.search.artist}
                         onClick={() => router.push(`/artist/spotify/${a.id}`)}
                       />
                     ))}
@@ -836,9 +843,9 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
               {(spotify?.albums.length ?? 0) > 0 && (
                 <section>
                   <div className="flex items-center justify-between">
-                    <h2 className={sectionTitleClass}>Albums</h2>
+                    <h2 className={sectionTitleClass}>{t.search.filtersAlbums}</h2>
                     <button onClick={() => setFilter("album")} className={seeAllClass}>
-                      Tout voir →
+                      {t.search.seeAll}
                     </button>
                   </div>
                   <Rail>
@@ -859,9 +866,9 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
               {(spotify?.playlists.length ?? 0) > 0 && (
                 <section>
                   <div className="flex items-center justify-between">
-                    <h2 className={sectionTitleClass}>Playlists</h2>
+                    <h2 className={sectionTitleClass}>{t.search.filtersPlaylists}</h2>
                     <button onClick={() => setFilter("playlist")} className={seeAllClass}>
-                      Tout voir →
+                      {t.search.seeAll}
                     </button>
                   </div>
                   <Rail>
@@ -870,7 +877,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                         key={p.id}
                         image={p.coverUrl}
                         title={p.name}
-                        subtitle={`Par ${p.owner}`}
+                        subtitle={fmt(t.common.byArtist, { owner: p.owner })}
                         onClick={() => router.push(`/import/spotify/${p.id}?type=playlist`)}
                       />
                     ))}
@@ -882,28 +889,28 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
 
           {filter === "track" && (
             <section>
-              <h2 className={sectionTitleClass}>Titres</h2>
+              <h2 className={sectionTitleClass}>{t.search.filtersTracks}</h2>
               <div className="mt-2 rounded-card bg-card border border-edge divide-y divide-edge overflow-hidden">
-                {(spotify?.tracks ?? []).map((t, i) => (
+                {(spotify?.tracks ?? []).map((stk, i) => (
                   <TrackRow
-                    key={t.spotifyId}
+                    key={stk.spotifyId}
                     index={i}
                     track={{
-                      id: `spotify:track:${t.spotifyId}`,
+                      id: `spotify:track:${stk.spotifyId}`,
                       platform: "spotify",
-                      platformTrackId: t.spotifyId,
-                      title: t.title,
-                      artist: t.artists,
-                      coverUrl: t.coverUrl,
-                      sourceUrl: `https://open.spotify.com/track/${t.spotifyId}`,
-                      durationMs: t.durationMs,
+                      platformTrackId: stk.spotifyId,
+                      title: stk.title,
+                      artist: stk.artists,
+                      coverUrl: stk.coverUrl,
+                      sourceUrl: `https://open.spotify.com/track/${stk.spotifyId}`,
+                      durationMs: stk.durationMs,
                     }}
-                    onPlay={() => void handleSpotifyTrack(t)}
+                    onPlay={() => void handleSpotifyTrack(stk)}
                     onMenu={(e) => {
                       e.stopPropagation();
-                      void resolveSpotifyTrack(t).then((resolved) => {
+                      void resolveSpotifyTrack(stk).then((resolved) => {
                         if (!resolved) {
-                          push("Titre illisible.", "error");
+                          push(t.common.unreadableTitle, "error");
                           return;
                         }
                         menuListRef.current = [resolved]; setMenuTrack(resolved);
@@ -937,7 +944,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                   round
                   image={a.imageUrl}
                   title={a.name}
-                  subtitle="Artiste"
+                  subtitle={t.search.artist}
                   onClick={() => router.push(`/artist/spotify/${a.id}`)}
                 />
               ))}
@@ -965,7 +972,7 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
                   key={p.id}
                   image={p.coverUrl}
                   title={p.name}
-                  subtitle={`Par ${p.owner}`}
+                  subtitle={fmt(t.common.byArtist, { owner: p.owner })}
                   onClick={() => router.push(`/import/spotify/${p.id}?type=playlist`)}
                 />
               ))}
