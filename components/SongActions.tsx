@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Heart, ListPlus, MoreHorizontal, Play } from "lucide-react";
 import { usePlayer } from "@/lib/player/engine";
 import { smartAddToQueue, smartPlayNext, toastQueueResult } from "@/lib/smartAddToQueue";
+import { shareTrackWithFriend } from "@/lib/dm";
 import { useToasts } from "@/lib/toast-store";
 import { isLiked, toggleLike } from "@/lib/library";
 import type { Track } from "@/lib/types";
@@ -93,6 +94,14 @@ export function SongActions({ track }: { track: Track }) {
               toastQueueResult(push, result, track.title)
             ),
           onLike: handleLike,
+          onShareToFriend: async (friendId) => {
+            const convId = await shareTrackWithFriend(track, friendId);
+            push(
+              convId ? t.chat.trackShared : t.common.operationImpossible,
+              convId ? "success" : "error"
+            );
+            return convId;
+          },
         }}
       />
     </div>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { usePlayer } from "@/lib/player/engine";
 import { smartAddToQueue, smartPlayNext, toastQueueResult } from "@/lib/smartAddToQueue";
 import { toggleLike } from "@/lib/library";
+import { shareTrackWithFriend } from "@/lib/dm";
 import { useToasts } from "@/lib/toast-store";
 import { PLATFORM_LABELS, type Track } from "@/lib/types";
 import { TrackMenu, anchorFromEvent } from "@/components/TrackMenu";
@@ -89,6 +90,14 @@ function useTrackMenu(tracks: Track[]) {
                 ok === false ? "error" : "success"
               )
             ),
+          onShareToFriend: async (friendId) => {
+            const convId = await shareTrackWithFriend(track, friendId);
+            push(
+              convId ? t.chat.trackShared : t.common.operationImpossible,
+              convId ? "success" : "error"
+            );
+            return convId;
+          },
         }}
       />
     );

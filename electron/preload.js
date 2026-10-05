@@ -35,5 +35,23 @@ contextBridge.exposeInMainWorld("resonance", {
   expandMainWindow: () => {
     ipcRenderer.send("resonance:mini-control", "expand");
   },
+  // Discord Rich Presence: renderer decides when (privacy + throttle),
+  // main owns the Discord IPC client.
+  setDiscordActivity: (activity) => {
+    ipcRenderer.send("discord:set-activity", activity);
+  },
+  clearDiscordActivity: () => {
+    ipcRenderer.send("discord:clear-activity");
+  },
+  // Lane B native OS notifications: renderer -> main (show),
+  // main -> renderer (click-to-open navigation).
+  notify: (payload) => {
+    ipcRenderer.send("resonance:notify", payload);
+  },
+  onNotificationClick: (callback) => {
+    const handler = (_event, route) => callback(route);
+    ipcRenderer.on("resonance:notification-click", handler);
+    return () => ipcRenderer.removeListener("resonance:notification-click", handler);
+  },
   isElectron: true,
 });

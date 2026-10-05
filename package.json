@@ -41,6 +41,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
+    "@xhayper/discord-rpc": "^1.5.1",
     "lucide-react": "^1.48.0",
     "nanoid": "^5.1.16",
     "next": "16.3.6",

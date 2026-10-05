@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Play, Radio, Users } from "lucide-react";
+import { LogOut, Play, Radio, UserPlus, Users } from "lucide-react";
 import { useJam } from "@/lib/jam-store";
+import { Popover, type PopoverAnchor } from "@/components/Popover";
+import { FriendPicker } from "@/components/FriendPicker";
+import { anchorFromEvent } from "@/components/TrackMenu";
+import { sendJamInvite, startConversation } from "@/lib/dm";
 import {
   createJamSession,
   deleteJamSession,
@@ -31,6 +35,9 @@ export function JamView() {
   const [codeInput, setCodeInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [inviteAnchor, setInviteAnchor] = useState<PopoverAnchor | null>(null);
+  const [inviteIds, setInviteIds] = useState<string[]>([]);
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     void createClient()
@@ -83,6 +90,41 @@ export function JamView() {
       push(t.jam.synced, "success");
     } else {
       push(fmt(t.jam.sessionJoined, { code: row.code }), "success");
+    }
+  }
+
+  async function handleInviteConfirm() {
+    if (!session || inviting || inviteIds.length === 0) return;
+    setInviting(true);
+    try {
+      const supabase = createClient();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("display_name")
+        .eq("id", userId ?? "")
+        .maybeSingle();
+      const hostName =
+        (profile as { display_name?: string | null } | null)?.display_name ||
+        (locale === "en" ? "Your friend" : "Ton ami");
+      let sent = 0;
+      for (const fid of inviteIds) {
+        const conv = await startConversation(fid);
+        if (!conv) continue;
+        const res = await sendJamInvite(conv.id, {
+          jamId: session.id,
+          code: session.code,
+          hostName,
+        });
+        if (res.ok) sent++;
+      }
+      setInviteAnchor(null);
+      setInviteIds([]);
+      push(
+        sent > 0 ? fmt(t.chat.jamInvited, { n: sent }) : t.common.operationImpossible,
+        sent > 0 ? "success" : "error"
+      );
+    } finally {
+      setInviting(false);
     }
   }
 
@@ -191,6 +233,16 @@ export function JamView() {
           <h2 className="text-[13px] font-semibold text-white">
             {fmt(t.jam.participants, { n: participants.length })}
           </h2>
+          <button
+            onClick={(e) => {
+              setInviteIds([]);
+              setInviteAnchor(anchorFromEvent(e));
+            }}
+            className="ml-auto flex items-center gap-1.5 rounded-card border border-edge bg-panel hover:bg-hover px-2.5 py-1.5 text-[12px] font-medium text-white transition-colors"
+          >
+            <UserPlus size={13} />
+            <span>{t.jam.inviteFriends}</span>
+          </button>
         </div>
         {participants.length === 0 ? (
           <p className="text-[12px] text-ink-muted">
@@ -227,6 +279,20 @@ export function JamView() {
       <p className="text-[12px] text-ink-muted">
         {session.isHost ? t.jam.hostHint : t.jam.guestHint}
       </p>
+
+      <Popover anchor={inviteAnchor} onClose={() => setInviteAnchor(null)}>
+        <FriendPicker
+          mode="multi"
+          selectedIds={inviteIds}
+          onToggle={(fid) =>
+            setInviteIds((prev) =>
+              prev.includes(fid) ? prev.filter((id) => id !== fid) : [...prev, fid]
+            )
+          }
+          onConfirm={() => void handleInviteConfirm()}
+          confirming={inviting}
+        />
+      </Popover>
     </div>
   );
 }

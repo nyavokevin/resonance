@@ -20,6 +20,11 @@ npm install
 Dans le **SQL Editor** de Supabase, exécute dans l'ordre (idempotents) :
 1. `supabase/migrations/001_init.sql` — profils, titres aimés, historique, file persistée
 2. `supabase/migrations/002_jam.sql` — sessions Jam, participants, RLS, Realtime
+3. `supabase/migrations/003_playlists.sql` — playlists, pistes, partage par token
+4. `supabase/migrations/004_social.sql` — amitiés, conversations, messages 1-1
+5. `supabase/migrations/005_social_rich.sql` — messages riches (titres, invitations Jam)
+6. `supabase/migrations/006_social_discord.sql` — opt-in Discord Presence (`profiles.discord_presence`)
+7. `supabase/migrations/007_notifications.sql` — notifications durables + trigger (Lane A)
 
 ### 2. Variables d'environnement
 Copie `.env.example` vers `.env.local` et renseigne :
@@ -110,7 +115,8 @@ npm run electron:build # installeur .exe → dossier release/
   bannière **Dernière écoute** (Écouter / Ajouter à la file), **Récemment
   écouté** (6 cartes compactes, lecture directe au clic), **Tendances**
   (top lectures par fréquence)
-- **Titres aimés** (`/liked`), **Morceau** (`/song/[id]`), **Jam** (`/jam`)
+- **Titres aimés** (`/liked`), **Morceau** (`/song/[id]`), **Jam** (`/jam`),
+  **Amis** (`/friends`), **Messages** (`/messages`, `/messages/[id]`)
 
 ### Jam — Écoute ensemble (Listen Together)
 - **Créer** une session → code à 6 caractères ; **rejoindre** avec le code
@@ -134,11 +140,63 @@ npm run electron:build # installeur .exe → dossier release/
   serveur ; l'invité se resynchronise automatiquement
 - Badge **"● JAM CODE • nom"** dans le player bar pendant la session
 
+### Social — Amis & Messagerie
+- **Amis** (`/friends`) : recherche d'utilisateurs (RPC `search_profiles`),
+  demandes reçues/envoyées, statuts pending/accepted/blocked (`blocked_by`,
+  rejet silencieux) ; DELETE pour refuser/annuler/retirer
+- **Conversations** : création paresseuse via `start_conversation` (amis
+  uniquement, ordre normalisé, idempotent) ; écritures RPC uniquement
+- **Messages** : text/system/track_share/jam_invite (`send_message` +
+  `mark_read`, ni update ni delete) ; temps réel `dm:{id}` (INSERT/UPDATE) +
+  canal `dm:{id}:typing` ("En train d'écrire...")
+- **Partage de titre** : "Partager à un ami" (TrackMenu → FriendPicker) → carte
+  riche avec ▶ (résolution + lecture) / ♥ ; aperçu inbox "🎵 Titre — Artiste"
+- **Invitations Jam** : "Inviter des amis" (multi-sélection) → carte jam_invite
+  → **Rejoindre** (join + `/jam`)
+- **Présence** : canal global `online` (heartbeat 30s), point vert + "Écoute : X"
+  chez les amis, uniquement si leurs toggles le permettent (meta auto-déclarée)
+- **Confidentialité** (`/settings`) : 4 toggles (partage d'écoute, demandes
+  d'amis, apparaître en ligne ; off = sortie immédiate de la présence ;
+  activité Discord, desktop uniquement)
+
+### Notifications (Lane A — durable + in-app)
+- **Table `notifications`** : type message/friend_request/friend_accepted/jam_invite,
+  payload jsonb, read_at ; RLS lecture + pose de read_at uniquement (INSERT trigger only)
+- **Trigger `notify_on_event`** : messages INSERT (résolution de l'autre participant,
+  garde sender≠recipient), friendships INSERT pending et UPDATE pending→accepted
+- **Canal in-app** : store temps réel (`notifications:{uid}`), toasts cliquables
+  (Voir / Accepter / Rejoindre), badges live Sidebar, cloche + dropdown (TopBar),
+  centre `/notifications` (groupes Aujourd'hui / Cette semaine / Plus ancien,
+  deep links message→`/messages/[id]`, friend_request→`/friends?tab=received`,
+  jam_invite→`/jam`)
+- **Electron** : Notification OS native quand `document.hidden` (clic → focus + route) ;
+  marche app ouverte ou minimisée, morte app fermée
+- **Suppression chat ouvert** côté client (`openConversationId`, marqué lu à
+  l'arrivée — pas de table user_presence par design) ; `profiles.push_token` +
+  flags `notif_*` stockés pour le sender v2, non appliqués
+
 ### Desktop (Electron)
 - `electron/main.js` : serveur Next embarqué (`next dev`) ou standalone
   (`server.js`, `output: "standalone"`), fenêtre 1280×800, media keys globaux
 - `npm run electron:build` : Next build → `prepare-electron.js` (copie
   static/public) → electron-builder (NSIS, `release/`, **~113 MB**)
+
+#### Discord Presence (desktop uniquement)
+- Affiche "Listening to Resonance" (titre, artiste, pochette, progression)
+  dans ton statut Discord via `@xhayper/discord-rpc` (processus main seul,
+  jamais le renderer)
+- **Portail** : crée une application sur
+  https://discord.com/developers/applications → **Rich Presence** → ajoute un
+  art asset nommé exactement `logo` (**512×512**) — sinon l'image par défaut
+  ne s'affiche pas
+- **Env** : `DISCORD_CLIENT_ID=` (vide = désactivé, aucune connexion tentée),
+  `DISCORD_SITE_URL=` optionnel (active le bouton "Écouter sur Resonance")
+- Note : `.env.local` suffit en dev (`npm run electron:dev`) ; l'app
+  packagée lit l'environnement au lancement (définis les vars avant
+  `electron:build` / au démarrage de l'installeur)
+- Vie privée : toggle "Afficher mon activité sur Discord" (`/settings`,
+  colonne `profiles.discord_presence`) ; `appear_online=false` masque aussi
+  Discord (invisible partout = invisible sur Discord)
 
 ---
 
@@ -168,10 +226,14 @@ lib/
   library-server.ts     fetchLiked / fetchRecentTracks / fetchTrending (serveur)
   jam.ts                sessions, RPC, Realtime (état + broadcast + presence)
   jam-store.ts          session, participants (+morceau écouté), moi
+  dm.ts                 conversations, messages, partage, invitations (client)
+  friends.ts            amitiés, recherche, blocage (client)
+  presence.ts           présence `online`, activité, frappe
+  notifications-store.ts notifications temps réel + toasts + badges (client)
   smartAddToQueue.ts    ajout file local vs Jam (host vs invité)
   toast-store.ts        toasts
-electron/               main.js, preload.js (media keys)
-supabase/migrations/    001_init.sql (base), 002_jam.sql (Jam)
+electron/               main.js, preload.js (media keys), discord-rpc.js (Rich Presence)
+supabase/migrations/    001 (base), 002 (Jam), 003 (playlists), 004 (social), 005 (social riche), 006 (discord), 007 (notifications)
 scripts/                prepare-electron.js
 proxy.ts                garde d'auth Next 16 (remplace middleware)
 ```
@@ -180,16 +242,24 @@ proxy.ts                garde d'auth Next 16 (remplace middleware)
 
 | Table | Rôle |
 |---|---|
-| `profiles` | id (= auth.uid), display_name, avatar_url (trigger à l'inscription, lecture ouverte aux authentifiés) |
+| `profiles` | id (= auth.uid), display_name, avatar_url (trigger à l'inscription, lecture ouverte aux authentifiés) + flags share_listening_activity / allow_friend_requests / appear_online / discord_presence |
 | `liked_tracks` | likes par user (unique user+plateforme+id) |
 | `history_entries` | historique (track jsonb) |
 | `queue_state` | reprise d'état par user |
 | `jam_sessions` | code, host, queue jsonb, current_track, index, position, is_playing |
 | `jam_participants` | présence persistée (session, user) |
+| `friendships` | demandes pending/accepted/blocked (+ blocked_by) |
+| `conversations` | paires normalisées user_a < user_b, dernier message |
+| `messages` | text/system/track_share/jam_invite (payload jsonb, read_at) |
+| `notifications` | message/friend_request/friend_accepted/jam_invite (payload jsonb, read_at) |
 
 RLS `auth.uid()` partout ; fonctions `SECURITY DEFINER` anti-récursion
-(`is_jam_participant`, `is_jam_host`) et d'accès contrôlé (`find_jam_session`,
-`jam_add_track`) ; `jam_sessions` publiée sur `supabase_realtime`.
+(`is_jam_participant`, `is_jam_host`, `is_friends_with`,
+`is_conversation_member`) et d'accès contrôlé (`find_jam_session`,
+`jam_add_track`, `start_conversation`, `send_message`, `mark_read`,
+`search_profiles`, `notify_on_event`) ; `jam_sessions`, `messages`,
+`conversations`, `notifications` publiées sur `supabase_realtime`
+(`friendships` exclue par design).
 
 ## Scripts
 
@@ -211,3 +281,9 @@ RLS `auth.uid()` partout ; fonctions `SECURITY DEFINER` anti-récursion
   fallback YouTube automatique dans ce cas
 - Recherche textuelle : source YouTube uniquement (scraping, sans clé API)
 - "Radio automatique", paroles, playlists, pages artiste/album, PWA : à venir
+- Social v1 : pas de temps réel sur les amitiés (refetch au focus), inbox plafonnée
+  à 200 lignes pour les aperçus, titre affiché en pause comme en lecture, pas de
+  suppression de conversation (ni de messages — par design)
+- Push v1 : pas d'envoi app fermée (ni app mobile / Edge Function / Web Push —
+  reportés en v2 avec une app mobile) ; pas de heartbeat user_presence ni de
+  push_log (aucun sender à rate-limiter) ; pastille cloche = lignes du store (cap 30)

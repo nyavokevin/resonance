@@ -134,13 +134,55 @@ export function DiscoverView({
 
   const genreMixes = categories.slice(0, 6);
 
-  /** Construit un mix : recherche Spotify → résolution YouTube (×3 conc). */
-  async function buildMix(label: string, query: string, count = 6): Promise<Track[] | null> {
+  /** Taille d'un mix + vivier de candidats (les échecs de resolve sont compensés). */
+  const MIX_COUNT = 30;
+  const MIX_POOL = 50;
+
+  type MixCandidate = {
+    platform: "spotify";
+    trackId?: string;
+    isrc?: string;
+    title: string;
+    artist: string;
+    album?: string;
+    coverUrl?: string;
+    durationMs?: number;
+  };
+
+  /** Resolve un candidat : strict (spotifyId + ISRC) puis repli texte seul. */
+  async function resolveCandidate(c: MixCandidate): Promise<Track | null> {
+    // Le chemin strict enchaîne 3 appels externes (Spotify, iTunes, scrape
+    // YouTube) et peut timeout ; le repli titre+artiste seul est léger et
+    // force le match texte pur côté serveur.
+    const attempts: MixCandidate[] =
+      c.trackId || c.isrc
+        ? [c, { platform: "spotify", title: c.title, artist: c.artist, durationMs: c.durationMs }]
+        : [c];
+    for (const body of attempts) {
+      try {
+        const r = await fetch("/api/resolve-track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const d = await r.json();
+        if (r.ok && d.track) return d.track as Track;
+      } catch {
+        // Essai suivant.
+      }
+    }
+    return null;
+  }
+
+  /** Construit un mix : large vivier Spotify → resolve jusqu'à `count` → top-up YouTube multi-requêtes. */
+  async function buildMix(label: string, query: string, count = MIX_COUNT): Promise<Track[] | null> {
     setBusyMix(label);
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(
+        `/api/search?q=${encodeURIComponent(query)}&type=track&limit=${MIX_POOL}`
+      );
       const data = await res.json();
-      const spotifyTracks = (data.source === "spotify" ? (data.tracks ?? []) : []).slice(0, count) as Array<{
+      const spotifyTracks = (data.source === "spotify" ? (data.tracks ?? []) : []) as Array<{
         title: string;
         artists: string;
         spotifyId: string;
@@ -149,49 +191,84 @@ export function DiscoverView({
         coverUrl?: string;
         durationMs?: number;
       }>;
-      const candidates = spotifyTracks.map((t) => ({
-        platform: "spotify" as const,
-        trackId: t.spotifyId,
-        isrc: t.isrc,
-        title: t.title,
-        artist: t.artists,
-        album: t.album,
-        coverUrl: t.coverUrl,
-        durationMs: t.durationMs,
-      }));
-      if (candidates.length === 0) {
-        // Repli YouTube direct : les résultats /api/search sont déjà des
-        // SearchResult { videoId, title, channel... } → mapping jouable.
-        const yt = (data.results ?? []) as Array<{
-          videoId: string;
-          title: string;
-          channel: string;
-          thumbnail?: string;
-          durationMs?: number;
-        }>;
-        if (yt.length === 0) throw new Error();
-        return yt.slice(0, count).map(searchResultToTrackSafe);
+      // Déduplique titre+artiste en gardant l'ordre de pertinence.
+      const seenQuery = new Set<string>();
+      const candidates: MixCandidate[] = [];
+      for (const t of spotifyTracks) {
+        const key = `${t.title} — ${t.artists}`.toLowerCase();
+        if (seenQuery.has(key)) continue;
+        seenQuery.add(key);
+        candidates.push({
+          platform: "spotify" as const,
+          trackId: t.spotifyId,
+          isrc: t.isrc,
+          title: t.title,
+          artist: t.artists,
+          album: t.album,
+          coverUrl: t.coverUrl,
+          durationMs: t.durationMs,
+        });
       }
+      // Parcourt le vivier par batchs de 3 jusqu'à `count` succès : un
+      // échec isolé ne réduit plus le mix, il consomme juste un candidat.
       const resolved: Track[] = [];
-      for (let i = 0; i < candidates.length; i += 3) {
+      const seenIds = new Set<string>();
+      for (let i = 0; i < candidates.length && resolved.length < count; i += 3) {
         const batch = candidates.slice(i, i + 3);
-        const results = await Promise.all(
-          batch.map(async (c) => {
+        const results = await Promise.all(batch.map((c) => resolveCandidate(c)));
+        for (const t of results) {
+          if (t && !seenIds.has(t.id) && resolved.length < count) {
+            seenIds.add(t.id);
+            resolved.push(t);
+          }
+        }
+      }
+      if (resolved.length < count) {
+        // Dernier recours : complète avec du YouTube direct (mapping jouable,
+        // même forme que /api/search?source=youtube) jusqu'à `count`.
+        // Une seule requête YouTube plafonne à ~12 résultats (slice côté
+        // searchYouTube) : on enchaîne 4 variantes et on fusionne en
+        // dédupliquant par videoId — le top-up peut fournir 30 titres seul.
+        // Même pattern que resolveGenreTracks (étape d), en plus large.
+        try {
+          const seenYt = new Set<string>();
+          const ytQueries = [
+            `${query} top hits`,
+            `${query} classics`,
+            `${query} music`,
+            query,
+          ];
+          for (const q of ytQueries) {
+            if (resolved.length >= count) break;
+            let yt: Array<{
+              videoId: string;
+              title: string;
+              channel: string;
+              thumbnail?: string;
+              durationMs?: number;
+            }> = [];
             try {
-              const r = await fetch("/api/resolve-track", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(c),
-              });
-              const d = await r.json();
-              if (!r.ok || !d.track) throw new Error();
-              return d.track as Track;
+              const ytRes = await fetch(
+                `/api/search?q=${encodeURIComponent(q)}&source=youtube`
+              );
+              const ytData = await ytRes.json();
+              yt = (ytData.results ?? []) as typeof yt;
             } catch {
-              return null;
+              continue;
             }
-          })
-        );
-        resolved.push(...(results.filter((t): t is Track => t !== null)));
+            for (const r of yt) {
+              if (resolved.length >= count) break;
+              if (!r.videoId || seenYt.has(r.videoId)) continue;
+              seenYt.add(r.videoId);
+              const t = searchResultToTrackSafe(r);
+              if (seenIds.has(t.id)) continue;
+              seenIds.add(t.id);
+              resolved.push(t);
+            }
+          }
+        } catch {
+          // On garde les titres déjà résolus.
+        }
       }
       return resolved.length > 0 ? resolved : null;
     } catch {
@@ -219,7 +296,7 @@ export function DiscoverView({
     const tracks = await buildMix(label, query);
     if (!tracks?.length) return;
     await playTrack(tracks[0], tracks);
-    const total = 6;
+    const total = MIX_COUNT;
     const missing = total - tracks.length;
     push(
       missing > 0
@@ -286,17 +363,16 @@ export function DiscoverView({
         </button>
       </section>
 
-      {/* Grille des catégories (cœur de la page) */}
-      {categories.length > 0 && (
-        <section className="space-y-3">
-          <h2 className={sectionTitle}>{t.discover.exploreByGenre}</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {categories.map((c) => (
-              <CategoryTile key={c.id} category={c} />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Grille des catégories (cœur de la page) — jamais vide :
+          la page fournit les genres statiques de secours si Spotify échoue. */}
+      <section className="space-y-3">
+        <h2 className={sectionTitle}>{t.discover.exploreByGenre}</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {categories.map((c) => (
+            <CategoryTile key={c.id} category={c} />
+          ))}
+        </div>
+      </section>
 
       {/* Sélection du moment (featured-playlists) */}
       {featured.length > 0 && (

@@ -1,8 +1,14 @@
-const { app, BrowserWindow, globalShortcut, ipcMain, nativeImage, screen } = require("electron");
+const { app, BrowserWindow, globalShortcut, ipcMain, nativeImage, screen, Notification } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
+let discord = null;
+try {
+  discord = require("./discord-rpc");
+} catch {
+  discord = null;
+}
 
 const PORT = 3000;
 const isDev = process.env.ELECTRON_DEV === "1";
@@ -178,6 +184,51 @@ ipcMain.on("resonance:playback-state", (_event, state) => {
   updateThumbar(state || {});
 });
 
+// ---- Discord Rich Presence (desktop only) -----------------------------
+// Renderer -> main relay: the renderer decides *when* (privacy gating,
+// throttling), main owns the Discord IPC client.
+
+ipcMain.on("discord:set-activity", (_event, activity) => {
+  try {
+    discord?.setActivity(activity || {});
+  } catch {
+    /* silent */
+  }
+});
+
+ipcMain.on("discord:clear-activity", () => {
+  try {
+    discord?.clearActivity();
+  } catch {
+    /* silent */
+  }
+});
+
+// ---- Native OS notifications (Lane B) ---------------------------------
+// Renderer (in-app lane) fires window.resonance?.notify({title, body, route})
+// only when document.hidden; click focuses the app + navigates to route.
+
+ipcMain.on("resonance:notify", (_event, payload) => {
+  try {
+    const { title, body, route } = payload || {};
+    if (!title && !body) return;
+    const n = new Notification({
+      title: title || "Resonance",
+      body: body || "",
+      silent: false,
+    });
+    n.on("click", () => {
+      expandMain();
+      if (route && win && !win.isDestroyed()) {
+        win.webContents.send("resonance:notification-click", route);
+      }
+    });
+    n.show();
+  } catch {
+    // Linux without a notify daemon (or any platform quirk) must never crash.
+  }
+});
+
 // ---- Mini floating window ---------------------------------------------
 
 function miniBoundsPath() {
@@ -314,6 +365,13 @@ function registerMediaKeys() {
 app.setAppUserModelId("app.resonance");
 
 app.whenReady().then(async () => {
+  if (process.env.DISCORD_CLIENT_ID) {
+    try {
+      discord?.init(process.env.DISCORD_CLIENT_ID);
+    } catch {
+      /* Discord optional — never break startup */
+    }
+  }
   startNextServer();
   try {
     await waitForServer();
@@ -337,6 +395,11 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => {
   isQuitting = true;
   globalShortcut.unregisterAll();
+  try {
+    discord?.destroy();
+  } catch {
+    /* silent */
+  }
   if (nextProc) nextProc.kill();
 });
 

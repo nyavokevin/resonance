@@ -554,6 +554,31 @@ export interface SpotifyCategory {
   iconUrl?: string;
 }
 
+/**
+ * Genres statiques de secours : la grille /discover ne doit jamais être
+ * morte. Les ids reprennent les ids de catégories Spotify connus ; à
+ * défaut, l'id vaut le nom en minuscules — la page /discover/[categoryId]
+ * résout de toute façon par recherche (nom + `genre:` + playlists).
+ * Pas d'iconUrl : la tuile affiche un emoji de repli.
+ */
+export const fallbackBrowseCategories: SpotifyCategory[] = [
+  { id: "pop", name: "Pop" },
+  { id: "rock", name: "Rock" },
+  { id: "hiphop", name: "Hip-Hop" },
+  { id: "jazz", name: "Jazz" },
+  { id: "electronic", name: "Electronic" },
+  { id: "rnb", name: "R&B" },
+  { id: "latin", name: "Latin" },
+  { id: "classical", name: "Classical" },
+  { id: "country", name: "Country" },
+  { id: "metal", name: "Metal" },
+  { id: "indie", name: "Indie" },
+  { id: "soul", name: "Soul" },
+];
+
+/** Alias explicite (même liste, nom d'intention). */
+export const FALLBACK_GENRES = fallbackBrowseCategories;
+
 interface CategoryObject {
   id?: string;
   name?: string;
@@ -577,12 +602,33 @@ export async function getBrowseCategories(limit = 50): Promise<SpotifyCategory[]
         name: c.name ?? c.id!,
         iconUrl: c.icons?.[0]?.url,
       }));
-    browseSet(key, items);
+    // Jamais de cache empoisonné : un résultat vide n'est pas mis en cache,
+    // sinon un seul échec fige la grille pendant 15min.
+    if (items.length > 0) browseSet(key, items);
     return items;
   } catch (e) {
     console.warn(`[spotify-api] categories failed: ${e instanceof Error ? e.message : e}`);
     return [];
   }
+}
+
+/**
+ * Catégories avec repli statique : la page /discover l'utilise pour que
+ * la grille ne soit jamais vide (panne API, credentials absentes…).
+ * Les ids de secours restent cliquables : getBrowseCategory les connaît
+ * et /discover/[categoryId] résout les titres par recherche.
+ */
+export async function getBrowseCategoriesWithFallback(
+  limit = 50
+): Promise<SpotifyCategory[]> {
+  try {
+    const items = await getBrowseCategories(limit);
+    if (items.length > 0) return items;
+  } catch {
+    // Passe au repli statique ci-dessous.
+  }
+  console.warn("[spotify-api] categories empty, using fallback genres");
+  return fallbackBrowseCategories.slice(0, Math.min(Math.max(limit, 1), 50));
 }
 
 export interface SpotifyCategoryPlaylist {
@@ -639,7 +685,7 @@ export async function getCategoryPlaylists(
     const items = (data.playlists?.items ?? [])
       .map((p) => (p ? toCategoryPlaylist(p) : null))
       .filter((p): p is SpotifyCategoryPlaylist => p !== null);
-    browseSet(key, items);
+    if (items.length > 0) browseSet(key, items);
     return items;
   } catch (e) {
     console.warn(`[spotify-api] category playlists failed: ${e instanceof Error ? e.message : e}`);
@@ -656,9 +702,12 @@ export async function getBrowseCategory(id: string): Promise<SpotifyCategory | n
     if (!data?.id) return null;
     return { id: data.id, name: data.name ?? data.id, iconUrl: data.icons?.[0]?.url };
   } catch {
-    // Repli : retrouver le nom dans la liste des catégories.
+    // Repli : retrouver le nom dans la liste des catégories…
     const all = await getBrowseCategories().catch(() => []);
-    return all.find((c) => c.id === id) ?? null;
+    const live = all.find((c) => c.id === id);
+    if (live) return live;
+    // …puis dans les genres statiques (clic depuis la grille de secours).
+    return fallbackBrowseCategories.find((c) => c.id === id) ?? null;
   }
 }
 
@@ -684,7 +733,7 @@ export async function getFeaturedPlaylists(limit = 10): Promise<SpotifyCategoryP
     const items = (data.playlists?.items ?? [])
       .map((p) => (p ? toCategoryPlaylist(p) : null))
       .filter((p): p is SpotifyCategoryPlaylist => p !== null);
-    browseSet(key, items);
+    if (items.length > 0) browseSet(key, items);
     return items;
   } catch (e) {
     console.warn(`[spotify-api] featured failed: ${e instanceof Error ? e.message : e}`);
@@ -729,7 +778,7 @@ export async function getNewReleases(limit = 10): Promise<SpotifyNewRelease[]> {
         releaseDate: a.release_date,
         trackCount: a.total_tracks,
       }));
-    browseSet(key, items);
+    if (items.length > 0) browseSet(key, items);
     return items;
   } catch (e) {
     console.warn(`[spotify-api] new-releases failed: ${e instanceof Error ? e.message : e}`);

@@ -22,6 +22,21 @@ declare global {
     | { type: "seek"; value: number }
     | { type: "sync" };
 
+  interface DiscordActivityPayload {
+    title: string;
+    artist: string;
+    coverUrl?: string | null;
+    durationMs?: number;
+    positionMs?: number;
+    isPlaying: boolean;
+  }
+
+  interface NotifyPayload {
+    title: string;
+    body: string;
+    route?: string;
+  }
+
   interface Window {
     resonance?: {
       isElectron: boolean;
@@ -37,6 +52,10 @@ declare global {
       onMiniCommand: (cb: (cmd: MiniCommand) => void) => () => void;
       openMiniWindow: () => void;
       expandMainWindow: () => void;
+      setDiscordActivity: (activity: DiscordActivityPayload) => void;
+      clearDiscordActivity: () => void;
+      notify: (payload: NotifyPayload) => void;
+      onNotificationClick: (cb: (route: string) => void) => () => void;
     };
   }
 }

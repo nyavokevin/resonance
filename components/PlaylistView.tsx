@@ -33,6 +33,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { usePlayer } from "@/lib/player/engine";
 import { smartAddToQueue, smartPlayNext, toastQueueResult } from "@/lib/smartAddToQueue";
+import { shareTrackWithFriend } from "@/lib/dm";
 import { useToasts } from "@/lib/toast-store";
 import { PLATFORM_LABELS } from "@/lib/types";
 import { formatDuration } from "@/components/TrackList";
@@ -687,6 +688,14 @@ export function PlaylistView({
                 usePlayer.getState().setQueueOpen(true);
                 toastQueueResult(push, result, menuRow.track.title);
               });
+            },
+            onShareToFriend: async (friendId) => {
+              const convId = await shareTrackWithFriend(menuRow.track, friendId);
+              push(
+                convId ? t.chat.trackShared : t.common.operationImpossible,
+                convId ? "success" : "error"
+              );
+              return convId;
             },
             ...(initial.isOwner
               ? {

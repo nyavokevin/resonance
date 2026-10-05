@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import {
   Heart,
   Home,
+  MessageCircle,
   Search,
   Settings,
   Sparkles,
   ListMusic,
   ListPlus,
   Play,
+  Users,
   MoreHorizontal,
   Pencil,
   Copy,
@@ -22,6 +24,8 @@ import { useToasts } from "@/lib/toast-store";
 import { useT } from "@/lib/i18n/locale-store";
 import { fmt } from "@/lib/i18n/dictionaries";
 import { usePlayer } from "@/lib/player/engine";
+import { createClient } from "@/lib/supabase/client";
+import { useNotifications } from "@/lib/notifications-store";
 import type { PlaylistSummaryServer } from "@/lib/library-server";
 import {
   createPlaylist,
@@ -56,12 +60,30 @@ export function Sidebar({
   const push = useToasts((s) => s.push);
   const t = useT();
   const playTrack = usePlayer((s) => s.playTrack);
+  const unreadDM = useNotifications((s) => s.unreadDM);
+  const pendingRequests = useNotifications((s) => s.pendingRequests);
 
   // Ferme le drawer mobile à chaque navigation.
   useEffect(() => {
     onClose();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
+
+  // Notifications : souscription unique (le store déduplique le canal).
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+    let cancelled = false;
+    void createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (cancelled || !data.user?.id) return;
+        unsubscribe = useNotifications.getState().subscribe(data.user.id);
+      });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, []);
 
   const [createAnchor, setCreateAnchor] = useState<PopoverAnchor | null>(null);
   const [createName, setCreateName] = useState("");
@@ -254,6 +276,40 @@ export function Sidebar({
           >
             <Search size={18} />
             <span>{t.nav.search}</span>
+          </Link>
+          <Link
+            href="/friends"
+            aria-current={pathname === "/friends" ? "page" : undefined}
+            className={`flex items-center gap-3 px-3 py-2 rounded-card transition-colors text-[13px] ${
+              pathname === "/friends"
+                ? "bg-hover text-white font-medium"
+                : "text-ink-soft hover:bg-hover hover:text-white"
+            }`}
+          >
+            <Users size={18} />
+            <span>{t.nav.friends}</span>
+            {pendingRequests > 0 && (
+              <span className="ml-auto rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {pendingRequests}
+              </span>
+            )}
+          </Link>
+          <Link
+            href="/messages"
+            aria-current={pathname === "/messages" ? "page" : undefined}
+            className={`flex items-center gap-3 px-3 py-2 rounded-card transition-colors text-[13px] ${
+              pathname === "/messages" || pathname.startsWith("/messages/")
+                ? "bg-hover text-white font-medium"
+                : "text-ink-soft hover:bg-hover hover:text-white"
+            }`}
+          >
+            <MessageCircle size={18} />
+            <span>{t.nav.messages}</span>
+            {unreadDM > 0 && (
+              <span className="ml-auto rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {unreadDM}
+              </span>
+            )}
           </Link>
           <Link
             href="/settings"

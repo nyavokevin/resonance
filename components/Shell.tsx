@@ -6,6 +6,8 @@ import { TopBar } from "@/components/TopBar";
 import { PlayerBar } from "@/components/PlayerBar";
 import { FloatingPlayer } from "@/components/FloatingPlayer";
 import { MiniSync } from "@/components/MiniSync";
+import { DiscordPresence } from "@/lib/discord-presence";
+import { ElectronNotifyListener } from "@/lib/electron-notify";
 import { QueuePanel } from "@/components/QueuePanel";
 import { Toaster } from "@/components/Toaster";
 import { JamController } from "@/components/JamController";
@@ -64,6 +66,8 @@ export function Shell({ user, likedCount, playlists, children }: ShellProps) {
         {user && <PlayerBar />}
         {user && <FloatingPlayer />}
         {user && <MiniSync />}
+        {user && <DiscordPresence />}
+        {user && <ElectronNotifyListener />}
         {user && <JamController />}
         <Toaster />
       </div>

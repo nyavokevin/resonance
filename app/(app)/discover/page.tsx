@@ -4,9 +4,9 @@ import {
   fetchGlobalTrending,
   fetchForgottenLikes,
 } from "@/lib/library-server";
-import { clearBrowseCache } from "@/lib/providers/spotify-api";
+import { clearBrowseCache, fallbackBrowseCategories } from "@/lib/providers/spotify-api";
 import {
-  getBrowseCategories,
+  getBrowseCategoriesWithFallback,
   getFeaturedPlaylists,
   getNewReleases,
 } from "@/lib/providers/spotify-api";
@@ -30,7 +30,8 @@ export default async function DiscoverPage({
       fetchTopArtists(5).catch(() => []),
       fetchGlobalTrending(10).catch(() => []),
       fetchForgottenLikes().catch(() => []),
-      getBrowseCategories(50).catch(() => []),
+      // Repli statique intégré : la grille des genres n'est jamais vide.
+      getBrowseCategoriesWithFallback(50).catch(() => fallbackBrowseCategories),
       getFeaturedPlaylists(10).catch(() => []),
       getNewReleases(10).catch(() => []),
     ]);

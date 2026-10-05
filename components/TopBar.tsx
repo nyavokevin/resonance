@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Bell } from "lucide-react";
 import { History, SlidersHorizontal, Download, LogOut, ChevronDown, Radio, ListMusic, Settings } from "lucide-react";
 import { UrlInput } from "@/components/UrlInput";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +11,11 @@ import { useToasts } from "@/lib/toast-store";
 import { useT } from "@/lib/i18n/locale-store";
 import { fmt } from "@/lib/i18n/dictionaries";
 import { useJam } from "@/lib/jam-store";
+import {
+  notificationContent,
+  notificationTarget,
+  useNotifications,
+} from "@/lib/notifications-store";
 
 interface TopBarProps {
   user: { email: string; displayName: string };
@@ -21,12 +27,19 @@ export function TopBar({ user, onMenu }: TopBarProps) {
   const push = useToasts((s) => s.push);
   const t = useT();
   const jamSession = useJam((s) => s.session);
+  const notifications = useNotifications((s) => s.notifications);
+  const markRead = useNotifications((s) => s.markRead);
+  const markAllRead = useNotifications((s) => s.markAllRead);
+  const unread = notifications.filter((n) => !n.read_at).length;
   const [menuOpen, setMenuOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const bellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+      if (!bellRef.current?.contains(e.target as Node)) setBellOpen(false);
     }
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
@@ -95,6 +108,75 @@ export function TopBar({ user, onMenu }: TopBarProps) {
           >
             <Download size={17} />
           </button>
+          <div ref={bellRef} className="relative">
+            <button
+              onClick={() => setBellOpen((o) => !o)}
+              title={t.notifications.title}
+              aria-label={t.notifications.title}
+              className="relative w-8 h-8 flex items-center justify-center rounded-card text-ink-soft hover:text-white hover:bg-hover transition-colors"
+            >
+              <Bell size={17} />
+              {unread > 0 && (
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent" />
+              )}
+            </button>
+
+            {bellOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 rounded-card border border-edge bg-card shadow-xl animate-rise-in overflow-hidden z-50">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-edge">
+                  <span className="text-[13px] font-semibold text-white">
+                    {t.notifications.title}
+                  </span>
+                  {unread > 0 && (
+                    <button
+                      onClick={() => void markAllRead()}
+                      className="text-[12px] text-ink-muted hover:text-white transition-colors"
+                    >
+                      {t.notifications.markAllRead}
+                    </button>
+                  )}
+                </div>
+                {notifications.length === 0 ? (
+                  <p className="px-3 py-3 text-[12px] text-ink-muted">
+                    {t.notifications.empty}
+                  </p>
+                ) : (
+                  notifications.slice(0, 8).map((n) => {
+                    const { body } = notificationContent(n);
+                    const initial = (n.payload.from_name || "?").charAt(0).toUpperCase();
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => {
+                          setBellOpen(false);
+                          void markRead(n.id);
+                          router.push(notificationTarget(n));
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-hover transition-colors"
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-hover border border-edge text-[11px] font-semibold text-white uppercase">
+                          {initial}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-ink-soft">
+                          {body}
+                        </span>
+                        {!n.read_at && (
+                          <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+                <Link
+                  href="/notifications"
+                  onClick={() => setBellOpen(false)}
+                  className="block px-3 py-2 text-center text-[12px] text-ink-muted hover:text-white border-t border-edge transition-colors"
+                >
+                  {t.notifications.title} →
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="h-4 w-px bg-edge" />

@@ -18,6 +18,7 @@ import { PLATFORM_COLORS, PLATFORM_LABELS, type Platform, type Track } from "@/l
 import { usePlayer } from "@/lib/player/engine";
 import { smartAddToQueue, smartPlayNext, toastQueueResult } from "@/lib/smartAddToQueue";
 import { toggleLike } from "@/lib/library";
+import { shareTrackWithFriend } from "@/lib/dm";
 import { useToasts } from "@/lib/toast-store";
 import { useSearchStore } from "@/lib/search-store";
 import { searchResultToTrack } from "@/lib/youtube-track";
@@ -474,6 +475,14 @@ export function SearchView({ recent, initialQuery }: { recent: Track[]; initialQ
               )
             ),
           onShare: () => handleShare(menuTrack),
+          onShareToFriend: async (friendId) => {
+            const convId = await shareTrackWithFriend(menuTrack, friendId);
+            push(
+              convId ? t.chat.trackShared : t.common.operationImpossible,
+              convId ? "success" : "error"
+            );
+            return convId;
+          },
           ...(onRemove ? { onRemove, removeLabel } : {}),
         }}
       />
