@@ -165,6 +165,7 @@ jobs:
           prerelease: false
           files: |
             artifacts/*.exe
+            artifacts/*.msi
             artifacts/*.dmg
             artifacts/*.zip
             artifacts/latest.yml

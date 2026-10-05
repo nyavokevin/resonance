@@ -39,10 +39,14 @@
         {
           "target": "nsis",
           "arch": ["x64"]
+        },
+        {
+          "target": "msi",
+          "arch": ["x64"]
         }
       ],
       "icon": "electron/icon.ico",
-      "artifactName": "Resonance-Setup-${version}.${ext}"
+      "artifactName": "Resonance-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
