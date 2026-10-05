@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import type { Conversation, Message } from "@/lib/social";
-import type { FriendProfile } from "@/lib/friends";
+import { fetchProfilesByIds, type FriendProfile } from "@/lib/friends";
 import type { Track } from "@/lib/types";
 import { useLocaleStore } from "@/lib/i18n/locale-store";
 
@@ -24,16 +24,21 @@ async function fetchProfiles(
   supabase: ReturnType<typeof createClient>,
   ids: string[]
 ): Promise<Map<string, FriendProfile>> {
-  const map = new Map<string, FriendProfile>();
-  if (ids.length === 0) return map;
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, display_name, avatar_url")
-    .in("id", ids);
-  for (const r of (data ?? []) as FriendProfile[]) {
-    map.set(r.id, { id: r.id, display_name: r.display_name, avatar_url: r.avatar_url });
-  }
-  return map;
+  // Repli sans colonne email intégré (009 non appliquée) — voir friends.ts.
+  return fetchProfilesByIds(supabase, ids);
+}
+
+/**
+ * Id de l'autre participant (user_a/user_b ≠ soi). Les colonnes sont
+ * ordonnées (user_a < user_b), donc on ne peut pas deviner par position.
+ */
+export function getPeerId(
+  conversation: Pick<Conversation, "user_a_id" | "user_b_id">,
+  selfId: string
+): string {
+  return conversation.user_a_id === selfId
+    ? conversation.user_b_id
+    : conversation.user_a_id;
 }
 
 /** Ouvre (ou récupère) la conversation 1-1 avec un ami. */
@@ -59,8 +64,7 @@ export async function getConversation(
   if (error || !data) return null;
   const conversation = data as Conversation;
   if (conversation.user_a_id !== userId && conversation.user_b_id !== userId) return null;
-  const otherId =
-    conversation.user_a_id === userId ? conversation.user_b_id : conversation.user_a_id;
+  const otherId = getPeerId(conversation, userId);
   const profiles = await fetchProfiles(supabase, [otherId]);
   return { conversation, otherId, profile: profiles.get(otherId) ?? null };
 }
@@ -81,7 +85,7 @@ export async function listConversations(): Promise<ConversationPreview[]> {
   if (convs.length === 0) return [];
 
   const ids = convs.map((c) => c.id);
-  const otherIds = convs.map((c) => (c.user_a_id === userId ? c.user_b_id : c.user_a_id));
+  const otherIds = convs.map((c) => getPeerId(c, userId));
   const [profiles, { data: recent }] = await Promise.all([
     fetchProfiles(supabase, otherIds),
     supabase
@@ -94,8 +98,7 @@ export async function listConversations(): Promise<ConversationPreview[]> {
   const rows = (recent ?? []) as Message[];
 
   return convs.map((conversation) => {
-    const otherId =
-      conversation.user_a_id === userId ? conversation.user_b_id : conversation.user_a_id;
+    const otherId = getPeerId(conversation, userId);
     const inConv = rows.filter((m) => m.conversation_id === conversation.id);
     return {
       conversation,
@@ -123,20 +126,56 @@ export async function getMessages(
   if (before) query = query.lt("created_at", before);
   const { data, error } = await query;
   if (error) return [];
-  return (data ?? []) as Message[];
+  // Durcit à la frontière : payload NULL → {} pour tous les lecteurs aval.
+  return ((data ?? []) as Message[]).map((m) => ({
+    ...m,
+    payload: richPayload(m),
+  }));
+}
+
+/**
+ * Payload toujours-objet : les vieilles lignes (pré-payload) ou inserts
+ * NULL n'ont pas d'objet — tout lecteur direct planterait dessus.
+ */
+export function richPayload(m: {
+  payload?: unknown;
+}): Record<string, unknown> {
+  const p = (m as { payload?: unknown }).payload;
+  return typeof p === "object" && p !== null
+    ? (p as Record<string, unknown>)
+    : {};
+}
+
+/** track_share affichable en carte (005 exige platform/track_id) ? Sinon bulle texte. */
+export function hasShareTarget(m: Message): boolean {
+  const p = richPayload(m);
+  return (
+    typeof p.platform === "string" &&
+    p.platform !== "" &&
+    typeof p.track_id === "string" &&
+    p.track_id !== ""
+  );
+}
+
+/** jam_invite affichable en carte ? Sinon bulle texte. */
+export function hasJamTarget(m: Message): boolean {
+  const p = richPayload(m);
+  return typeof p.jam_id === "string" && p.jam_id !== "";
 }
 
 /** Texte d'aperçu inbox : libellé riche pour track_share/jam_invite, contenu sinon. */
 export function messagePreview(m: Message): string {
   if (m.type === "track_share") {
-    const p = m.payload as { title?: unknown; artist?: unknown };
-    const title = typeof p.title === "string" && p.title ? p.title : m.content;
+    const p = richPayload(m);
+    const title =
+      typeof p.title === "string" && p.title ? p.title : m.content;
     const artist = typeof p.artist === "string" ? p.artist : "";
     return artist ? `🎵 ${title} — ${artist}` : `🎵 ${title}`;
   }
   if (m.type === "jam_invite") {
-    const p = m.payload as { host_name?: unknown };
-    const host = typeof p.host_name === "string" && p.host_name ? p.host_name : "?";
+    const p = richPayload(m);
+    const host =
+      typeof p.host_name === "string" && p.host_name ? p.host_name : "?";
     return useLocaleStore.getState().locale === "en" ? `🎧 ${host}'s Jam` : `🎧 Jam de ${host}`;
   }
   return m.content;

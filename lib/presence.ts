@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
 import { usePlayer } from "@/lib/player/engine";
+import { useJam } from "@/lib/jam-store";
+import { syncOwnProfileEmail } from "@/lib/friends";
 import type { ProfilePrivacy } from "@/lib/social";
 
 // Canal `online` global : présence + activité d'écoute des amis (Phase 5).
@@ -25,9 +27,14 @@ export interface ActivityTrack {
 export interface PresenceMeta {
   name: string;
   track: ActivityTrack | null;
+  /** Code de la Jam rejointe, ou null hors Jam (payload tiny : 6 chars). */
+  jamCode: string | null;
 }
 
-export type OnlineMap = Map<string, { online: boolean; track: ActivityTrack | null }>;
+export type OnlineMap = Map<
+  string,
+  { online: boolean; track: ActivityTrack | null; jamCode: string | null }
+>;
 
 interface PresenceState {
   entries: Record<string, PresenceMeta>;
@@ -131,7 +138,12 @@ export function ensureOnlineChannel(
     void supabase.removeChannel(existing);
   }
 
-  const ch = supabase.channel(TOPIC) as Channel;
+  // Clé de présence = userId (comme lib/jam.ts) : sans elle, les clés
+  // de presenceState() sont aléatoires et useOnlineUsers(friendIds) ne
+  // retrouve jamais personne — meta.track semblait toujours vide côté lecteur.
+  const ch = supabase.channel(TOPIC, {
+    config: { presence: { key: userId } },
+  }) as Channel;
   channel = ch;
   activeUserId = userId;
   refCount = 1;
@@ -185,7 +197,11 @@ export function useOnlineUsers(friendIds: string[]): OnlineMap {
     const map: OnlineMap = new Map();
     for (const id of key.split(",").filter(Boolean)) {
       const meta = entries[id];
-      map.set(id, { online: Boolean(meta), track: meta?.track ?? null });
+      map.set(id, {
+        online: Boolean(meta),
+        track: meta?.track ?? null,
+        jamCode: meta?.jamCode ?? null,
+      });
     }
     return map;
   }, [entries, key]);
@@ -201,15 +217,19 @@ export function usePresenceBootstrap(): void {
   const [privacy, setPrivacy] = useState<ProfilePrivacy | null>(null);
   const [myName, setMyName] = useState("?");
   const track = usePlayer((s) => s.currentTrack());
+  // Code de la Jam rejointe (null hors Jam) — lu comme currentTrack.
+  const jamCode = useJam((s) => s.session?.code ?? null);
 
   const privacyRef = useRef(privacy);
   const nameRef = useRef(myName);
   const trackRef = useRef(track);
+  const jamCodeRef = useRef(jamCode);
 
   useEffect(() => {
     privacyRef.current = privacy;
     nameRef.current = myName;
     trackRef.current = track;
+    jamCodeRef.current = jamCode;
   });
 
   useEffect(() => {
@@ -219,9 +239,18 @@ export function usePresenceBootstrap(): void {
       const { data: auth } = await supabase.auth.getUser();
       if (cancelled || !auth.user?.id) return;
       setSelfId(auth.user.id);
+      // Backfill pré-009 : persiste l'email auth dans sa ligne profiles
+      // (une seule écriture tant que la colonne est NULL).
+      void syncOwnProfileEmail();
       const row = await fetchMyPrivacy();
       if (cancelled || !row) return;
-      setMyName(row.display_name || "?");
+      // Même chaîne que displayNameOf, avec l'email auth direct (lisible
+      // pour soi) : display_name → préfixe email → "?".
+      setMyName(
+        row.display_name?.trim() ||
+          auth.user.email?.split("@")[0]?.trim() ||
+          "?"
+      );
       setPrivacy({
         share_listening_activity: row.share_listening_activity,
         allow_friend_requests: row.allow_friend_requests,
@@ -238,6 +267,7 @@ export function usePresenceBootstrap(): void {
     ? `${privacy.appear_online}/${privacy.share_listening_activity}`
     : "";
   const trackKey = track ? `${track.title} — ${track.artist}` : "";
+  const jamCodeKey = jamCode ?? "";
 
   useEffect(() => {
     if (!selfId || !privacy) return;
@@ -251,6 +281,10 @@ export function usePresenceBootstrap(): void {
           p.share_listening_activity && t
             ? { title: t.title, artist: t.artist }
             : null,
+        // Confiance à la meta auto-déclarée (comme le titre) : le canal
+        // est filtré côté client aux amis via useOnlineUsers(friendIds) —
+        // le code n'est donc visible que par les amis en ligne.
+        jamCode: jamCodeRef.current,
       };
     });
     return unsubscribe;
@@ -259,5 +293,5 @@ export function usePresenceBootstrap(): void {
 
   useEffect(() => {
     retrackPresence();
-  }, [trackKey, privacyKey]);
+  }, [trackKey, privacyKey, jamCodeKey]);
 }

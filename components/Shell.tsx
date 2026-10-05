@@ -17,7 +17,7 @@ import { useInitLocale } from "@/lib/i18n/locale-store";
 import type { PlaylistSummaryServer } from "@/lib/library-server";
 
 interface ShellProps {
-  user: { email: string; displayName: string } | null;
+  user: { email: string; displayName: string; avatarUrl?: string } | null;
   likedCount: number;
   playlists: PlaylistSummaryServer[];
   children: ReactNode;

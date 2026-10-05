@@ -9,14 +9,23 @@ import { FriendPicker } from "@/components/FriendPicker";
 import { anchorFromEvent } from "@/components/TrackMenu";
 import { sendJamInvite, startConversation } from "@/lib/dm";
 import {
+  approveJoinRequest,
+  cancelJoinRequest,
   createJamSession,
+  declineJoinRequest,
   deleteJamSession,
   fetchJamState,
   fetchParticipants,
   findJamSessionByCode,
+  isJoinRequestsSupported,
   joinJamSession,
   leaveJamSession,
+  listJoinRequests,
+  requestToJoin,
+  subscribeJoinRequests,
+  type JamJoinRequest,
 } from "@/lib/jam";
+import { displayNameOf } from "@/lib/friends";
 import { usePlayer } from "@/lib/player/engine";
 import { useToasts } from "@/lib/toast-store";
 import { createClient } from "@/lib/supabase/client";
@@ -38,6 +47,10 @@ export function JamView() {
   const [inviteAnchor, setInviteAnchor] = useState<PopoverAnchor | null>(null);
   const [inviteIds, setInviteIds] = useState<string[]>([]);
   const [inviting, setInviting] = useState(false);
+  // Demande envoyée, en attente de la décision du host (guest, sans session).
+  const [pendingJoin, setPendingJoin] = useState<{ sessionId: string; code: string } | null>(null);
+  // Demandes reçues (host uniquement).
+  const [joinRequests, setJoinRequests] = useState<JamJoinRequest[]>([]);
 
   useEffect(() => {
     void createClient()
@@ -54,6 +67,43 @@ export function JamView() {
       .catch(() => {});
   }, [session]);
 
+  // Guest : suit la décision du host sur sa demande (temps réel).
+  useEffect(() => {
+    if (session || !pendingJoin || !userId) return;
+    const { sessionId, code } = pendingJoin;
+    const unsubscribe = subscribeJoinRequests(sessionId, (row) => {
+      if (!row || row.user_id !== userId) return;
+      if (row.status === "accepted") {
+        setPendingJoin(null);
+        void completeGuestJoin(sessionId, code);
+      } else if (row.status === "declined") {
+        setPendingJoin(null);
+        push(t.jam.requestDeclined, "info");
+      }
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, pendingJoin, userId, push, t]);
+
+  // Host : liste + suivi temps réel des demandes en attente.
+  // (Pas de setState synchrone ici : joinRequests est vidé dans handleLeave
+  // et la section ne rend que si session.isHost.)
+  useEffect(() => {
+    if (!session?.isHost) return;
+    let cancelled = false;
+    const refresh = () => {
+      void listJoinRequests(session.id).then((rows) => {
+        if (!cancelled) setJoinRequests(rows);
+      });
+    };
+    refresh();
+    const unsubscribe = subscribeJoinRequests(session.id, () => refresh());
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [session?.id, session?.isHost]);
+
   async function handleCreate() {
     if (!userId || loading) return;
     setLoading(true);
@@ -66,6 +116,18 @@ export function JamView() {
     setParticipants([{ id: userId, name: locale === "en" ? "You (host)" : "Toi (host)" }]);
     setSession({ id: row.id, code: row.code, isHost: true });
     push(fmt(t.jam.sessionCreated, { code: row.code }), "success");
+  }
+
+  /** Entrée dans la session après acceptation (guest) — même final que le join direct. */
+  async function completeGuestJoin(sessionId: string, code: string) {
+    const state = await fetchJamState(sessionId);
+    setSession({ id: sessionId, code, isHost: false });
+    if (state && state.queue.length > 0) {
+      await usePlayer.getState().applyJamState(state);
+      push(t.jam.synced, "success");
+    } else {
+      push(fmt(t.jam.sessionJoined, { code }), "success");
+    }
   }
 
   async function handleJoin() {
@@ -81,16 +143,80 @@ export function JamView() {
       return;
     }
     const isHost = row.host_id === userId;
-    if (!isHost && userId) await joinJamSession(row.id, userId);
-    const state = await fetchJamState(row.id);
-    setSession({ id: row.id, code: row.code, isHost });
-    setLoading(false);
-    if (state && state.queue.length > 0) {
-      await usePlayer.getState().applyJamState(state);
-      push(t.jam.synced, "success");
-    } else {
-      push(fmt(t.jam.sessionJoined, { code: row.code }), "success");
+    if (isHost) {
+      // Reprise de sa propre session : direct, pas de demande.
+      const state = await fetchJamState(row.id);
+      setSession({ id: row.id, code: row.code, isHost });
+      setLoading(false);
+      if (state && state.queue.length > 0) {
+        await usePlayer.getState().applyJamState(state);
+        push(t.jam.synced, "success");
+      } else {
+        push(fmt(t.jam.sessionJoined, { code: row.code }), "success");
+      }
+      return;
     }
+    if (!userId) {
+      setLoading(false);
+      push(t.jam.sessionNotFound, "error");
+      return;
+    }
+    // Guest : demande au host au lieu du join instantané.
+    const req = await requestToJoin(row.id);
+    setLoading(false);
+    if (!req) {
+      // 010 absente : repli direct legacy pour que le bouton fonctionne
+      // toujours (requestToJoin a déjà console.warn). Sinon toast d'erreur.
+      if (isJoinRequestsSupported() === false) {
+        console.warn(
+          "[jam] join requests unavailable — falling back to direct join"
+        );
+        const ok = await joinJamSession(row.id, userId);
+        if (!ok) {
+          push(t.jam.sessionNotFound, "error");
+          return;
+        }
+        await completeGuestJoin(row.id, row.code);
+        return;
+      }
+      push(t.jam.sessionNotFound, "error");
+      return;
+    }
+    if (req.status === "accepted") {
+      // Déjà accepté auparavant (ex. retour après départ) : direct.
+      await completeGuestJoin(row.id, row.code);
+      return;
+    }
+    setPendingJoin({ sessionId: row.id, code: row.code });
+    push(t.jam.requestSent, "success");
+  }
+
+  async function handleCancelJoin() {
+    if (!pendingJoin || !userId) return;
+    await cancelJoinRequest(pendingJoin.sessionId, userId);
+    setPendingJoin(null);
+  }
+
+  async function handleApproveRequest(requestUserId: string, name: string) {
+    if (!session) return;
+    const ok = await approveJoinRequest(session.id, requestUserId);
+    push(
+      ok ? fmt(t.jam.requestAccepted, { name }) : t.common.operationImpossible,
+      ok ? "success" : "error"
+    );
+    if (ok) {
+      void listJoinRequests(session.id).then(setJoinRequests);
+    }
+  }
+
+  async function handleDeclineRequest(requestUserId: string) {
+    if (!session) return;
+    const ok = await declineJoinRequest(session.id, requestUserId);
+    if (!ok) {
+      push(t.common.operationImpossible, "error");
+      return;
+    }
+    void listJoinRequests(session.id).then(setJoinRequests);
   }
 
   async function handleInviteConfirm() {
@@ -139,10 +265,35 @@ export function JamView() {
     }
     setSession(null);
     setParticipants([]);
+    setJoinRequests([]);
+    setPendingJoin(null);
     router.push("/");
   }
 
   if (!session) {
+    if (pendingJoin) {
+      return (
+        <div className="max-w-xl space-y-4">
+          <div className="rounded-card bg-card border border-edge p-6">
+            <div className="flex items-center gap-2.5 mb-1">
+              <Radio size={20} className="text-accent" />
+              <h1 className="font-display text-[20px] font-bold text-white">
+                {fmt(t.jam.sessionCode, { code: pendingJoin.code })}
+              </h1>
+            </div>
+            <p className="text-[13px] text-accent animate-pulse">
+              {t.jam.requestPending}
+            </p>
+            <button
+              onClick={() => void handleCancelJoin()}
+              className="mt-4 px-4 py-2 rounded-card bg-panel hover:bg-hover border border-edge text-ink-soft hover:text-white text-[12px] font-medium transition-colors"
+            >
+              {t.jam.cancelRequest}
+            </button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="max-w-xl space-y-4">
         <div className="rounded-card bg-card border border-edge p-6">
@@ -244,6 +395,45 @@ export function JamView() {
             <span>{t.jam.inviteFriends}</span>
           </button>
         </div>
+        {session.isHost && joinRequests.length > 0 && (
+          <div className="mb-3 border-b border-edge pb-3">
+            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-accent">
+              {fmt(t.jam.pendingRequests, { n: joinRequests.length })}
+            </h3>
+            <ul className="flex flex-col gap-1.5">
+              {joinRequests.map((r) => (
+                <li
+                  key={r.user_id}
+                  className="flex items-center gap-2.5 px-2 py-1.5 rounded-card bg-base border border-edge"
+                >
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-hover border border-edge text-[12px] font-semibold text-white uppercase">
+                    {displayNameOf(r.profile, r.user_id, "JamView:joinRequest").charAt(0)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-white">
+                    {displayNameOf(r.profile, r.user_id, "JamView:joinRequest")}
+                  </span>
+                  <button
+                    onClick={() =>
+                      void handleApproveRequest(
+                        r.user_id,
+                        displayNameOf(r.profile, r.user_id, "JamView:joinRequest")
+                      )
+                    }
+                    className="shrink-0 rounded-card bg-accent hover:bg-accent-hover px-2.5 py-1.5 text-[12px] font-medium text-white transition-colors"
+                  >
+                    {t.jam.accept}
+                  </button>
+                  <button
+                    onClick={() => void handleDeclineRequest(r.user_id)}
+                    className="shrink-0 rounded-card border border-edge px-2.5 py-1.5 text-[12px] text-ink-soft hover:text-white transition-colors"
+                  >
+                    {t.jam.decline}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {participants.length === 0 ? (
           <p className="text-[12px] text-ink-muted">
             {t.jam.waiting}

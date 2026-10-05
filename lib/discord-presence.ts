@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { usePlayer } from "@/lib/player/engine";
+import { dictionaries } from "@/lib/i18n/dictionaries";
+import { useLocaleStore } from "@/lib/i18n/locale-store";
 
 const THROTTLE_MS = 5_000;
 const PROGRESS_DELTA_MS = 1_000;
@@ -67,8 +69,34 @@ export function useDiscordPresence(): void {
       }
     };
 
+    /**
+     * L'artiste ne doit jamais partir vide : une chaîne vide/blanche
+     * serait abandonnée par le fork (`if (activity.state)` dans
+     * ClientUser.setActivity) et Discord n'afficherait que le titre.
+     * Chaîne : track.artist → channel/author si présents → libellé
+     * localisé en dernier recours uniquement.
+     */
+    const resolveArtist = (track: {
+      artist?: string;
+      channel?: string;
+      author?: string;
+    }): string => {
+      const direct = track.artist?.trim();
+      if (direct) return direct;
+      const fallback = track.channel?.trim() || track.author?.trim();
+      if (fallback) return fallback;
+      return dictionaries[useLocaleStore.getState().locale].common
+        .unknownArtist;
+    };
+
     const push = (
-      track: { title: string; artist: string; coverUrl?: string },
+      track: {
+        title: string;
+        artist: string;
+        channel?: string;
+        author?: string;
+        coverUrl?: string;
+      },
       s: { positionMs: number; durationMs: number; isPlaying: boolean }
     ) => {
       lastSentAt = Date.now();
@@ -77,7 +105,7 @@ export function useDiscordPresence(): void {
       try {
         window.resonance?.setDiscordActivity({
           title: track.title,
-          artist: track.artist,
+          artist: resolveArtist(track),
           coverUrl: track.coverUrl ?? null,
           durationMs: s.durationMs,
           positionMs: Math.round(s.positionMs),

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Ban,
   Check,
+  Headphones,
   MessageCircle,
   MoreHorizontal,
   Search,
@@ -15,11 +16,23 @@ import {
 import { useToasts } from "@/lib/toast-store";
 import { useT } from "@/lib/i18n/locale-store";
 import { fmt } from "@/lib/i18n/dictionaries";
+import { createClient } from "@/lib/supabase/client";
+import {
+  fetchJamState,
+  findJamSessionByCode,
+  isJoinRequestsSupported,
+  joinJamSession,
+  requestToJoin,
+  subscribeJoinRequests,
+} from "@/lib/jam";
+import { useJam } from "@/lib/jam-store";
+import { usePlayer } from "@/lib/player/engine";
 import { useOnlineUsers, usePresenceBootstrap } from "@/lib/presence";
 import {
   acceptRequest,
   blockUser,
   cancelRequest,
+  displayNameOf,
   listFriends,
   listReceived,
   listSent,
@@ -150,8 +163,110 @@ export function FriendsView() {
     }
   }
 
+  // Demandes de Jam envoyées, en attente du host (sessionId + code).
+  const [pendingJoins, setPendingJoins] = useState<{ sessionId: string; code: string }[]>([]);
+  const [selfId, setSelfId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void createClient()
+      .auth.getUser()
+      .then(({ data }) => setSelfId(data.user?.id ?? null));
+  }, []);
+
+  /** Entrée dans la session après acceptation du host. */
+  const completeJoin = useCallback(
+    async (sessionId: string, code: string) => {
+      const state = await fetchJamState(sessionId);
+      useJam.getState().setSession({ id: sessionId, code, isHost: false });
+      if (state && state.queue.length > 0) {
+        await usePlayer.getState().applyJamState(state);
+        push(t.jam.synced, "success");
+      } else {
+        push(fmt(t.jam.sessionJoined, { code }), "success");
+      }
+      setPendingJoins((prev) => prev.filter((p) => p.sessionId !== sessionId));
+      router.push("/jam");
+    },
+    [push, router, t]
+  );
+
+  // Suit la décision du host sur les demandes envoyées (temps réel).
+  useEffect(() => {
+    if (!selfId || pendingJoins.length === 0) return;
+    const unsubs = pendingJoins.map(({ sessionId, code }) =>
+      subscribeJoinRequests(sessionId, (row) => {
+        if (!row || row.user_id !== selfId) return;
+        if (row.status === "accepted") {
+          void completeJoin(sessionId, code);
+        } else if (row.status === "declined") {
+          push(t.jam.requestDeclined, "info");
+          setPendingJoins((prev) =>
+            prev.filter((p) => p.sessionId !== sessionId)
+          );
+        }
+      })
+    );
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+    };
+  }, [selfId, pendingJoins, completeJoin, push, t]);
+
+  /** Demande à rejoindre la Jam active d'un ami (code auto-déclaré via présence). */
+  async function handleJoinJam(code: string) {
+    if (busyId) return;
+    const key = `jam:${code}`;
+    setBusyId(key);
+    try {
+      const { data } = await createClient().auth.getUser();
+      const uid = data.user?.id;
+      if (!uid) {
+        push(t.jam.sessionNotFound, "error");
+        return;
+      }
+      // La session a pu se terminer entre la présence et le clic.
+      const session = await findJamSessionByCode(code);
+      if (!session) {
+        push(t.jam.sessionNotFound, "error");
+        return;
+      }
+      const req = await requestToJoin(session.id);
+      if (!req) {
+        // 010 absente : repli direct legacy pour que le bouton fonctionne
+        // toujours (requestToJoin a déjà console.warn). Sinon toast d'erreur.
+        if (isJoinRequestsSupported() === false) {
+          console.warn(
+            "[friends] join requests unavailable — falling back to direct join"
+          );
+          const ok = await joinJamSession(session.id, uid);
+          if (!ok) {
+            push(t.jam.sessionNotFound, "error");
+            return;
+          }
+          await completeJoin(session.id, session.code);
+          return;
+        }
+        push(t.jam.sessionNotFound, "error");
+        return;
+      }
+      if (req.status === "accepted") {
+        // Déjà accepté auparavant : entrée directe.
+        await completeJoin(session.id, session.code);
+        return;
+      }
+      setPendingJoins((prev) =>
+        prev.some((p) => p.sessionId === session.id)
+          ? prev
+          : [...prev, { sessionId: session.id, code: session.code }]
+      );
+      push(t.jam.requestSent, "success");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // display_name → préfixe email → id tronqué (voir displayNameOf).
   const displayName = (p: FriendshipWithProfile) =>
-    p.profile?.display_name || p.otherId.slice(0, 8);
+    displayNameOf(p.profile, p.otherId, "FriendsView:row");
 
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: "all", label: t.friends.tabs.all },
@@ -183,9 +298,9 @@ export function FriendsView() {
               const added = addedIds.has(u.id);
               return (
                 <li key={u.id} className="flex items-center gap-2.5 py-2">
-                  <Avatar name={u.display_name ?? "?"} url={u.avatar_url} />
+                  <Avatar name={displayNameOf(u, u.id, "FriendsView:search")} url={u.avatar_url} />
                   <span className="min-w-0 flex-1 truncate text-[13px] text-white">
-                    {u.display_name ?? u.id.slice(0, 8)}
+                    {displayNameOf(u, u.id, "FriendsView:search")}
                   </span>
                   <button
                     onClick={() => void handleAdd(u.id)}
@@ -230,7 +345,7 @@ export function FriendsView() {
           ) : (
             received.map(({ friendship, profile, otherId }) => (
               <div key={friendship.id} className="flex items-center gap-2.5 px-3 py-2">
-                <Avatar name={profile?.display_name ?? "?"} url={profile?.avatar_url ?? null} />
+                <Avatar name={displayNameOf(profile, otherId, "FriendsView:received")} url={profile?.avatar_url ?? null} />
                 <span className="min-w-0 flex-1 truncate text-[13px] text-white">
                   {displayName({ friendship, profile, otherId })}
                 </span>
@@ -269,7 +384,7 @@ export function FriendsView() {
           ) : (
             sent.map(({ friendship, profile, otherId }) => (
               <div key={friendship.id} className="flex items-center gap-2.5 px-3 py-2">
-                <Avatar name={profile?.display_name ?? "?"} url={profile?.avatar_url ?? null} />
+                <Avatar name={displayNameOf(profile, otherId, "FriendsView:sent")} url={profile?.avatar_url ?? null} />
                 <span className="min-w-0 flex-1 truncate text-[13px] text-white">
                   {displayName({ friendship, profile, otherId })}
                 </span>
@@ -297,10 +412,11 @@ export function FriendsView() {
               // filtrer la présence) — une meta présente = diffusion autorisée.
               const presence = onlineMap.get(otherId);
               const listening = presence?.track;
+              const jamCode = presence?.jamCode ?? null;
               return (
                 <div key={friendship.id} className="flex items-center gap-2.5 px-3 py-2">
                   <span className="relative shrink-0">
-                    <Avatar name={profile?.display_name ?? "?"} url={profile?.avatar_url ?? null} />
+                    <Avatar name={displayNameOf(profile, otherId, "FriendsView:row")} url={profile?.avatar_url ?? null} />
                     {presence?.online && (
                       <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-card bg-ok" />
                     )}
@@ -318,6 +434,27 @@ export function FriendsView() {
                       </span>
                     )}
                   </span>
+                  {jamCode &&
+                    (() => {
+                      const requested = pendingJoins.some(
+                        (p) => p.code === jamCode
+                      );
+                      const busy = busyId === `jam:${jamCode}`;
+                      return (
+                        <button
+                          onClick={() => void handleJoinJam(jamCode)}
+                          disabled={busy || requested}
+                          className="flex shrink-0 items-center gap-1 rounded-card border border-edge px-2.5 py-1.5 text-[12px] font-medium text-accent hover:text-white transition-colors disabled:opacity-60"
+                        >
+                          <Headphones size={13} />
+                          <span>
+                            {requested
+                              ? t.friends.list.requested
+                              : t.friends.list.joinJam}
+                          </span>
+                        </button>
+                      );
+                    })()}
                   <button
                     onClick={() => router.push(`/messages?to=${otherId}`)}
                     className="flex shrink-0 items-center gap-1.5 rounded-card bg-accent hover:bg-accent-hover px-2.5 py-1.5 text-[12px] font-medium text-white transition-colors"

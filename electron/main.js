@@ -9,6 +9,13 @@ try {
 } catch {
   discord = null;
 }
+// Auto-update (electron-updater) — chargé paresseusement : no-op en dev.
+let updater = null;
+try {
+  updater = require("./auto-updater");
+} catch {
+  updater = null;
+}
 
 const PORT = 3000;
 const isDev = process.env.ELECTRON_DEV === "1";
@@ -204,6 +211,34 @@ ipcMain.on("discord:clear-activity", () => {
   }
 });
 
+// ---- Auto-update (desktop packaged only) ------------------------------
+// Le module auto-updater est no-op en dev / non-packagé ; tous les handlers
+// restent inoffensifs si le module n'a pas pu se charger.
+
+ipcMain.on("update:check", (_event, manual) => {
+  try {
+    updater?.checkForUpdates(Boolean(manual));
+  } catch {
+    /* silent */
+  }
+});
+
+ipcMain.on("update:set-auto", (_event, on) => {
+  try {
+    updater?.setAutoDownload(Boolean(on));
+  } catch {
+    /* silent */
+  }
+});
+
+ipcMain.handle("app:version", () => {
+  try {
+    return app.getVersion();
+  } catch {
+    return "0.0.0";
+  }
+});
+
 // ---- Native OS notifications (Lane B) ---------------------------------
 // Renderer (in-app lane) fires window.resonance?.notify({title, body, route})
 // only when document.hidden; click focuses the app + navigates to route.
@@ -382,6 +417,19 @@ app.whenReady().then(async () => {
   }
   createWindow();
   registerMediaKeys();
+
+  // Auto-update : startAutoUpdate est appelé sur TOUTES les builds (dev
+  // inclus) pour que les événements status aient toujours une cible (bouton
+  // "Vérifier" dans Réglages). Le module s'auto-suspend en dev
+  // (!app.isPackaged → pas de timers 3s/4h, check retourne
+  // dev-not-available).
+  if (updater) {
+    try {
+      updater.startAutoUpdate(win);
+    } catch {
+      /* ne jamais casser le démarrage */
+    }
+  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

@@ -11,6 +11,7 @@ import {
   startConversation,
   type ConversationPreview,
 } from "@/lib/dm";
+import { displayNameOf } from "@/lib/friends";
 
 function Avatar({ name, url }: { name: string; url: string | null }) {
   if (url) {
@@ -98,7 +99,7 @@ export function MessagesView() {
       ) : (
         <ul className="rounded-card bg-card border border-edge divide-y divide-edge">
           {convs.map(({ conversation, otherId, profile, lastMessage, unread }) => {
-            const name = profile?.display_name || otherId.slice(0, 8);
+            const name = displayNameOf(profile, otherId, "MessagesView:inbox");
             const stamp = lastMessage?.created_at ?? conversation.last_message_at;
             return (
               <li key={conversation.id}>
@@ -106,7 +107,7 @@ export function MessagesView() {
                   href={`/messages/${conversation.id}`}
                   className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-hover"
                 >
-                  <Avatar name={profile?.display_name ?? "?"} url={profile?.avatar_url ?? null} />
+                  <Avatar name={displayNameOf(profile, otherId, "MessagesView:inbox")} url={profile?.avatar_url ?? null} />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-baseline justify-between gap-2">
                       <span className="truncate text-[13px] font-medium text-white">{name}</span>

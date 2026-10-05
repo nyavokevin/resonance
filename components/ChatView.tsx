@@ -10,21 +10,25 @@ import { fmt } from "@/lib/i18n/dictionaries";
 import { createClient } from "@/lib/supabase/client";
 import { usePlayer } from "@/lib/player/engine";
 import { isLiked, toggleLike } from "@/lib/library";
-import { joinJamSession } from "@/lib/jam";
+import { joinInvitedSession } from "@/lib/jam";
+import { useJam } from "@/lib/jam-store";
 import {
   getConversation,
   getMessages,
+  hasJamTarget,
+  hasShareTarget,
   markRead,
+  richPayload,
   sendText,
   subscribeConversation,
   subscribeTyping,
   type TypingHandle,
 } from "@/lib/dm";
-import { usePresenceBootstrap } from "@/lib/presence";
+import { useOnlineUsers, usePresenceBootstrap } from "@/lib/presence";
 import { useNotifications } from "@/lib/notifications-store";
 import { PLATFORM_LABELS, type Platform, type Track } from "@/lib/types";
 import type { Message } from "@/lib/social";
-import type { FriendProfile } from "@/lib/friends";
+import { displayNameOf, type FriendProfile } from "@/lib/friends";
 
 interface PendingMessage {
   tempId: string;
@@ -57,7 +61,7 @@ function TrackShareCard({ message }: { message: Message }) {
   const [playing, setPlaying] = useState(false);
   const [liked, setLiked] = useState<boolean | null>(null);
 
-  const p = message.payload as {
+  const p = richPayload(message) as {
     platform?: string;
     track_id?: string;
     title?: string;
@@ -175,7 +179,7 @@ function JamInviteCard({ message }: { message: Message }) {
   const router = useRouter();
   const [joining, setJoining] = useState(false);
 
-  const p = message.payload as { jam_id?: string; code?: string; host_name?: string };
+  const p = richPayload(message) as { jam_id?: string; code?: string; host_name?: string };
   const host = p.host_name || "?";
 
   async function handleJoin() {
@@ -188,11 +192,19 @@ function JamInviteCard({ message }: { message: Message }) {
         push(t.jam.sessionNotFound, "error");
         return;
       }
-      const ok = await joinJamSession(p.jam_id, uid);
+      const ok = await joinInvitedSession(p.jam_id, uid);
       if (!ok) {
         push(t.jam.sessionNotFound, "error");
         return;
       }
+      const code = (() => {
+        const raw = richPayload(message);
+        return typeof raw.code === "string" && raw.code ? raw.code : "…";
+      })();
+      useJam.getState().setParticipants([
+        { id: uid, name: host },
+      ]);
+      push(fmt(t.jam.sessionJoined, { code }), "success");
       router.push("/jam");
     } finally {
       setJoining(false);
@@ -249,6 +261,10 @@ export function ChatView({ conversationId }: { conversationId: string }) {
   const typingClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   usePresenceBootstrap();
+  // Activité d'écoute du pair (même canal `online` que FriendsView) :
+  // otherId vient de la conversation (user_a/user_b ≠ soi, voir getPeerId).
+  const onlineMap = useOnlineUsers(otherId ? [otherId] : []);
+  const peerListening = otherId ? onlineMap.get(otherId)?.track ?? null : null;
 
   const handleInsert = useCallback(
     (msg: Message) => {
@@ -392,7 +408,7 @@ export function ChatView({ conversationId }: { conversationId: string }) {
     void sendContent(input);
   }
 
-  const name = profile?.display_name || otherId.slice(0, 8) || "…";
+  const name = displayNameOf(profile, otherId, "ChatView:header") || "…";
   const lastMessage = messages[messages.length - 1];
   const showSeen =
     pending.length === 0 &&
@@ -410,9 +426,19 @@ export function ChatView({ conversationId }: { conversationId: string }) {
         >
           <ArrowLeft size={17} />
         </Link>
-        <Avatar name={profile?.display_name ?? "?"} url={profile?.avatar_url ?? null} />
-        <span className="truncate text-[14px] font-semibold text-white" title={fmt(t.messages.to, { name })}>
-          {name}
+        <Avatar name={displayNameOf(profile, otherId, "ChatView:header") || "?"} url={profile?.avatar_url ?? null} />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[14px] font-semibold text-white" title={fmt(t.messages.to, { name })}>
+            {name}
+          </span>
+          {peerListening && (
+            <span className="block truncate text-[11px] text-accent">
+              {fmt(t.friends.listening, {
+                title: peerListening.title,
+                artist: peerListening.artist,
+              })}
+            </span>
+          )}
         </span>
       </header>
       {peerTyping && (
@@ -439,9 +465,9 @@ export function ChatView({ conversationId }: { conversationId: string }) {
                 <div key={m.id} className={`flex gap-2 ${mine ? "justify-end" : "justify-start"}`}>
                   {!mine && (grouped ? <span className="w-8 shrink-0" /> : <Avatar name={name} url={profile?.avatar_url ?? null} />)}
                   <div className={`max-w-[75%] ${mine ? "items-end" : "items-start"} flex flex-col`}>
-                    {m.type === "track_share" ? (
+                    {m.type === "track_share" && hasShareTarget(m) ? (
                       <TrackShareCard message={m} />
-                    ) : m.type === "jam_invite" ? (
+                    ) : m.type === "jam_invite" && hasJamTarget(m) ? (
                       <JamInviteCard message={m} />
                     ) : (
                       <div

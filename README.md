@@ -200,6 +200,61 @@ npm run electron:build # installeur .exe → dossier release/
 
 ---
 
+## Publication & mises à jour (CI/CD + auto-update)
+
+### Sortir une release
+1. Bump la version dans `package.json` (ex. `0.2.0`) — **le tag DOIT
+   correspondre exactement**.
+2. Commit, puis tag :
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. Le workflow `.github/workflows/release.yml` tourne alors :
+   - **verify** (ubuntu) : version==tag, `npm ci`, lint, tsc, `next build`
+   - **build-windows** : installeur NSIS `Resonance-Setup-0.2.0.exe`
+   - **build-macos** : DMG + ZIP (`x64` + `arm64`)
+   - **release** : crée le GitHub Release avec `latest.yml` /
+     `latest-mac.yml` + les installeurs → c'est ce qui déclenche l'update
+     côté clients installés.
+
+### Secrets GitHub (tous optionnels — non signé fonctionne quand même)
+| Secret | Utilité | Sans lui |
+|---|---|---|
+| `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` | Signature Windows (PFX) | Installeur Windows non signé (avertissement SmartScreen) |
+| `CSC_LINK` / `CSC_KEY_PASSWORD` | Certificat générique (win + mac CI) | Builds non signés |
+| `APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` | Notarisation macOS | App macOS non notariée (ouvre mais alerte Gatekeeper) |
+
+### 3 pièges classiques
+1. **`latest.yml` / `latest-mac.yml` doivent être dans les assets** du
+   Release — le workflow les y met (générés par electron-builder dans
+   `release/`). Sans eux, electron-updater ne voit jamais la nouvelle version.
+2. **macOS exige le `.zip`** (pas seulement le `.dmg`) : c'est le zip que
+   lit electron-updater sous mac.
+3. **`v` du tag = version `package.json`** : un décalage fait échouer le
+   job `verify` (checks automatique).
+
+### Kill-switch
+Une version boguée déjà publiée ? **Édite le GitHub Release → passe-le en
+*Draft*** : les clients cessent de le voir comme mise à jour (et
+re-recherchent via les releases précédentes). Supprimer le release fait
+pareil, mais republier un tag identique nécessite de re-tagger.
+
+### Comportement auto-update
+| Situation | Comportement |
+|---|---|
+| Lancement | Check automatique après ~3 s, puis toutes les 4 h |
+| Hors-ligne / GitHub indisponible | Échec silencieux ; le bouton **Vérifier les mises à jour** (Réglages) remonte l'erreur |
+| Bouton Vérifier | Check manuel : "✓ À jour", progression du téléchargement, ou erreur |
+| Toggle "Mises à jour automatiques" OFF | Plus aucun téléchargement en arrière-plan (persisté `resonance:auto-update`) |
+| Téléchargé → quitter l'app | **L'installation se lance automatiquement à la fermeture** (autoInstallOnAppQuit) |
+
+- En dev (`npm run electron:dev`), l'auto-update est **désactivée**
+  (`app.isPackaged` requis) : la carte "Mise à jour" n'apparaît d'ailleurs
+  pas dans Réglages hors Electron packagé.
+
+---
+
 ## Architecture
 
 ```

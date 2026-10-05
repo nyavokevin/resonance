@@ -37,6 +37,20 @@ declare global {
     route?: string;
   }
 
+  /** Statut d'update relayé par le processus main (auto-updater). */
+  type UpdateStatus =
+    | { event: "checking" }
+    | { event: "available"; version: string }
+    | { event: "none" }
+    | { event: "progress"; percent: number; mb: number }
+    | { event: "downloaded"; version: string }
+    | {
+        event: "error";
+        message?: string;
+        /** Code machine optionnel mappé par le renderer (ex. dev-not-available, timeout). */
+        code?: string;
+      };
+
   interface Window {
     resonance?: {
       isElectron: boolean;
@@ -56,6 +70,12 @@ declare global {
       clearDiscordActivity: () => void;
       notify: (payload: NotifyPayload) => void;
       onNotificationClick: (cb: (route: string) => void) => () => void;
+      update: {
+        checkForUpdates: (manual: boolean) => void;
+        onUpdateStatus: (cb: (status: UpdateStatus) => void) => () => void;
+        setAutoDownload: (on: boolean) => void;
+        getAppVersion: () => Promise<string>;
+      };
     };
   }
 }

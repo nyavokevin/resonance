@@ -57,9 +57,10 @@ export interface ProfilePrivacy {
   discord_presence: boolean;
 }
 
-/** Ligne retournée par le RPC `search_profiles`. */
+/** Ligne retournée par le RPC `search_profiles` (009 ajoute `email`). */
 export interface ProfileSearchResult {
   id: string;
   display_name: string | null;
   avatar_url: string | null;
+  email: string | null;
 }

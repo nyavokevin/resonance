@@ -592,8 +592,10 @@ export function QueuePanel() {
         )}
       </div>
 
-      {/* C — Suggestions automatiques */}
-      {(autoplay || autoRows.length > 0) && (
+      {/* C — Suggestions automatiques : visible uniquement si autoplay ON.
+          OFF → rien du tout (pas de boîte vide). Les lignes AUTO restantes
+          éventuelles restent en file mais ne s'affichent pas. */}
+      {autoplay && (
         <div className="flex flex-col gap-2 min-h-0 pt-3 border-t border-edge">
           <div className="flex items-center justify-between shrink-0">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -629,9 +631,7 @@ export function QueuePanel() {
           </div>
           {autoRows.length === 0 ? (
             <p className="text-[12px] text-ink-muted py-1">
-              {autoplay
-                ? t.queuePanel.suggestionsHint
-                : t.queuePanel.radioOff}
+              {t.queuePanel.suggestionsHint}
             </p>
           ) : (
             <div className="space-y-1 min-h-0 overflow-y-auto pr-0.5">

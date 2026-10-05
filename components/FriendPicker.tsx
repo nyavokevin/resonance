@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Check } from "lucide-react";
-import { listFriends, type FriendshipWithProfile } from "@/lib/friends";
+import { displayNameOf, listFriends, type FriendshipWithProfile } from "@/lib/friends";
 import { useT } from "@/lib/i18n/locale-store";
 import { fmt } from "@/lib/i18n/dictionaries";
 
@@ -55,7 +55,7 @@ export function FriendPicker({
   const q = query.trim().toLowerCase();
   const filtered = q
     ? friends.filter((f) =>
-        (f.profile?.display_name ?? "").toLowerCase().includes(q)
+        displayNameOf(f.profile, f.otherId, "FriendPicker:filter").toLowerCase().includes(q)
       )
     : friends;
   const selected = new Set(selectedIds);
@@ -81,7 +81,7 @@ export function FriendPicker({
           <p className="px-3 py-3 text-[12px] text-ink-muted">{t.friendPicker.empty}</p>
         ) : (
           filtered.map(({ otherId, profile }) => {
-            const name = profile?.display_name || otherId.slice(0, 8);
+            const name = displayNameOf(profile, otherId, "FriendPicker:row");
             const checked = selected.has(otherId);
             return (
               <button
@@ -91,7 +91,7 @@ export function FriendPicker({
                 }
                 className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors text-ink-soft hover:bg-hover hover:text-white"
               >
-                <FriendAvatar name={profile?.display_name ?? "?"} />
+                <FriendAvatar name={displayNameOf(profile, otherId, "FriendPicker:row")} />
                 <span className="min-w-0 flex-1 truncate text-[13px]">{name}</span>
                 {mode === "multi" && checked && <Check size={14} className="shrink-0 text-accent" />}
               </button>

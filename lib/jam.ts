@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { JAM_STORAGE_KEY, type JamParticipant, type JamPlaybackState, type JamSession, type JamTrackMeta } from "@/lib/jam-store";
+import { fetchProfilesByIds } from "@/lib/friends";
 import type { Track } from "@/lib/types";
 import { dictionaries } from "@/lib/i18n/dictionaries";
 import { useLocaleStore } from "@/lib/i18n/locale-store";
@@ -81,6 +82,49 @@ export async function joinJamSession(
   return !error;
 }
 
+/**
+ * Join direct par invitation (carte jam_invite / notification) : invite =
+ * pré-approbation par le host, donc AUCUN parcours de demande. Vérifie que
+ * la session existe encore, ajoute le participant et remplit le store Jam
+ * (même setter que le host après create) pour que /jam rende la session
+ * live — sans ça, un router.push('/jam') seul tombait sur l'écran de
+ * création (restoreJamSession ne lit que le localStorage, jamais rempli
+ * ici). Rend null si session terminée/introuvable (l'appelant affiche
+ * t.jam.sessionNotFound et ne navigue pas).
+ */
+export async function joinInvitedSession(
+  sessionId: string,
+  userId: string
+): Promise<JamSession | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("jam_sessions")
+    .select("id, code, host_id")
+    .eq("id", sessionId)
+    .maybeSingle();
+  if (error || !data) {
+    console.warn(
+      `[jam] joinInvitedSession: session ${sessionId} not found or unreadable`
+    );
+    return null;
+  }
+  const ok = await joinJamSession(sessionId, userId);
+  if (!ok) {
+    console.warn(`[jam] joinInvitedSession: could not add participant ${userId}`);
+    return null;
+  }
+  const joined: JamSession = {
+    id: data.id,
+    code: data.code,
+    isHost: data.host_id === userId,
+  };
+  // Même setter que le host après create : le store doit détenir la session
+  // AVANT navigation pour que /jam affiche participants/tracks.
+  const { useJam } = await import("@/lib/jam-store");
+  useJam.getState().setSession(joined);
+  return joined;
+}
+
 export async function leaveJamSession(
   sessionId: string,
   userId: string
@@ -91,6 +135,209 @@ export async function leaveJamSession(
     .delete()
     .eq("session_id", sessionId)
     .eq("user_id", userId);
+}
+
+// ========== JOIN REQUESTS (migration 010) ==========
+// Nouveau régime : un guest demande, le host accepte/refuse. Le join
+// instantané direct (joinJamSession) ne reste que pour les invités explicites
+// (carte jam_invite), la restauration de session — et le repli legacy quand
+// 010 n'est pas appliquée (voir isJoinRequestsAvailable).
+
+/**
+ * La migration 010 est-elle appliquée ? Détecté à l'usage : un appel RPC /
+ * table manquant (fonction 42883, table 42P01) bascule à false, un appel
+ * réussi à true, null = pas encore tenté. Les appelants s'en servent pour
+ * retomber sur le join direct legacy plutôt que laisser un bouton mort.
+ */
+let joinRequestsSupported: boolean | null = null;
+
+export function isJoinRequestsSupported(): boolean | null {
+  return joinRequestsSupported;
+}
+
+/** Erreur "objet absent" (migration 010 non appliquée) ? */
+export function isMissingJoinRequestsError(error: unknown): boolean {
+  const code = (error as { code?: unknown }).code;
+  if (code === "42883" || code === "42P01" || code === "PGRST202") return true;
+  const message = (error as { message?: unknown }).message;
+  return (
+    typeof message === "string" && /jam_join_requests|request_jam_join/i.test(message)
+  );
+}
+
+export type JoinRequestStatus = "pending" | "accepted" | "declined";
+
+export interface JoinRequestRow {
+  session_id: string;
+  user_id: string;
+  status: JoinRequestStatus;
+  created_at: string;
+}
+
+export interface JamJoinRequest extends JoinRequestRow {
+  profile: {
+    display_name: string | null;
+    avatar_url: string | null;
+    email: string | null;
+  } | null;
+}
+
+/** Demande à rejoindre (idempotent : renvoie la ligne, même si déjà pending/accepted). */
+export async function requestToJoin(
+  sessionId: string
+): Promise<JoinRequestRow | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("request_jam_join", {
+    p_session_id: sessionId,
+  });
+  if (error || !data) {
+    if (error && isMissingJoinRequestsError(error)) {
+      joinRequestsSupported = false;
+      console.warn(
+        "[jam] join requests unavailable (migration 010 not applied?) — callers should fall back to direct join"
+      );
+    }
+    return null;
+  }
+  joinRequestsSupported = true;
+  return data as JoinRequestRow;
+}
+
+/** Demandes en attente d'une session (host) + profil du demandeur. */
+export async function listJoinRequests(
+  sessionId: string
+): Promise<JamJoinRequest[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("jam_join_requests")
+    .select("session_id, user_id, status, created_at")
+    .eq("session_id", sessionId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+  if (error) return [];
+  const rows = (data ?? []) as JoinRequestRow[];
+  if (rows.length === 0) return [];
+  // Repli sans colonne email intégré (009 non appliquée) — voir friends.ts.
+  const byId = await fetchProfilesByIds(
+    supabase,
+    rows.map((r) => r.user_id)
+  );
+  return rows.map((r) => {
+    const p = byId.get(r.user_id);
+    return {
+      ...r,
+      profile: p
+        ? {
+            display_name: p.display_name,
+            avatar_url: p.avatar_url,
+            email: p.email ?? null,
+          }
+        : null,
+    };
+  });
+}
+
+/** Acceptation host (pending → accepted + ajout participant, atomique côté serveur). */
+export async function approveJoinRequest(
+  sessionId: string,
+  userId: string
+): Promise<boolean> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("approve_jam_join_request", {
+    p_session_id: sessionId,
+    p_user_id: userId,
+  });
+  if (error) return false;
+  return data === true;
+}
+
+/** Refus host (pending → declined, terminal). */
+export async function declineJoinRequest(
+  sessionId: string,
+  userId: string
+): Promise<boolean> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("decline_jam_join_request", {
+    p_session_id: sessionId,
+    p_user_id: userId,
+  });
+  if (error) return false;
+  return data === true;
+}
+
+/**
+ * Retrait par le guest (DELETE own — choix documenté : plus simple qu'un
+ * état `cancelled`, le host n'a plus rien à voir). Le refus host, lui,
+ * reste en ligne `declined` (pas de DELETE).
+ */
+export async function cancelJoinRequest(
+  sessionId: string,
+  userId: string
+): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("jam_join_requests")
+    .delete()
+    .eq("session_id", sessionId)
+    .eq("user_id", userId);
+  return !error;
+}
+
+/**
+ * Temps réel des demandes d'une session (StrictMode-safe, même idiome que
+ * subscribeConversation). Le RLS filtre : le host reçoit tout (INSERT +
+ * UPDATE + DELETE), le guest seulement sa propre ligne. `null` = ligne
+ * supprimée (retrait guest) — à ignorer côté décision, le host refetche.
+ */
+export function subscribeJoinRequests(
+  sessionId: string,
+  onChange: (row: JoinRequestRow | null) => void
+): () => void {
+  const supabase = createClient();
+  const topic = `jam:${sessionId}:requests`;
+
+  const existing = supabase.getChannels().find((c) => c.topic === topic);
+  if (existing) {
+    void supabase.removeChannel(existing);
+  }
+
+  const channel = supabase.channel(topic);
+  const emit = (row: unknown) => onChange(row as JoinRequestRow);
+  channel.on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "jam_join_requests",
+      filter: `session_id=eq.${sessionId}`,
+    },
+    (payload) => emit(payload.new)
+  );
+  channel.on(
+    "postgres_changes",
+    {
+      event: "UPDATE",
+      schema: "public",
+      table: "jam_join_requests",
+      filter: `session_id=eq.${sessionId}`,
+    },
+    (payload) => emit(payload.new)
+  );
+  channel.on(
+    "postgres_changes",
+    {
+      event: "DELETE",
+      schema: "public",
+      table: "jam_join_requests",
+      filter: `session_id=eq.${sessionId}`,
+    },
+    () => onChange(null)
+  );
+  void channel.subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }
 
 export async function restoreJamSession(

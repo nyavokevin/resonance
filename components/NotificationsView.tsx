@@ -115,8 +115,8 @@ export function NotificationsView() {
               <ul className="rounded-card bg-card border border-edge divide-y divide-edge">
                 {g.rows.map((n) => {
                   const { body } = notificationContent(n);
-                  const name = n.payload.from_name || "?";
-                  const avatarUrl = n.payload.from_user_id
+                  const name = n.payload?.from_name || "?";
+                  const avatarUrl = n.payload?.from_user_id
                     ? (avatars[n.payload.from_user_id] ?? null)
                     : null;
                   return (

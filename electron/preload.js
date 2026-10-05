@@ -53,5 +53,20 @@ contextBridge.exposeInMainWorld("resonance", {
     ipcRenderer.on("resonance:notification-click", handler);
     return () => ipcRenderer.removeListener("resonance:notification-click", handler);
   },
+  // Auto-update (main -> renderer status, renderer -> main commandes).
+  update: {
+    checkForUpdates: (manual) => {
+      ipcRenderer.send("update:check", Boolean(manual));
+    },
+    onUpdateStatus: (callback) => {
+      const handler = (_event, status) => callback(status);
+      ipcRenderer.on("update:status", handler);
+      return () => ipcRenderer.removeListener("update:status", handler);
+    },
+    setAutoDownload: (on) => {
+      ipcRenderer.send("update:set-auto", Boolean(on));
+    },
+    getAppVersion: () => ipcRenderer.invoke("app:version"),
+  },
   isElectron: true,
 });

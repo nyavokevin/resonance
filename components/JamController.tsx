@@ -64,7 +64,10 @@ export function JamController() {
         .select("display_name")
         .eq("id", user.id)
         .maybeSingle();
-      const name = profile?.display_name ?? user.email ?? (locale === "en" ? "Guest" : "Invité");
+      const name =
+        profile?.display_name?.trim() ||
+        user.email?.split("@")[0]?.trim() ||
+        (locale === "en" ? "Guest" : "Invité");
       setMe({ id: user.id, name });
 
       const isHost = session!.isHost;

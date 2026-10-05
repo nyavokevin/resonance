@@ -18,8 +18,31 @@ import {
 } from "@/lib/notifications-store";
 
 interface TopBarProps {
-  user: { email: string; displayName: string };
+  user: { email: string; displayName: string; avatarUrl?: string };
   onMenu?: () => void;
+}
+
+// Stale/404 avatar URL (bucket wiped, file removed, 008 not applied) :
+// fall back to the initial instead of a broken <img>. The key= on the
+// call site remounts on URL change, resetting the broken flag.
+function HeaderAvatar({ url, initial }: { url: string; initial: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <span className="flex w-8 h-8 items-center justify-center rounded-full bg-hover border border-edge text-white text-[13px] font-semibold">
+        {initial}
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      onError={() => setBroken(true)}
+      className="w-8 h-8 shrink-0 rounded-full object-cover border border-edge"
+    />
+  );
 }
 
 export function TopBar({ user, onMenu }: TopBarProps) {
@@ -143,7 +166,7 @@ export function TopBar({ user, onMenu }: TopBarProps) {
                 ) : (
                   notifications.slice(0, 8).map((n) => {
                     const { body } = notificationContent(n);
-                    const initial = (n.payload.from_name || "?").charAt(0).toUpperCase();
+                    const initial = (n.payload?.from_name || "?").charAt(0).toUpperCase();
                     return (
                       <button
                         key={n.id}
@@ -186,9 +209,13 @@ export function TopBar({ user, onMenu }: TopBarProps) {
             onClick={() => setMenuOpen((o) => !o)}
             className="flex items-center gap-2 pl-1 hover:opacity-90"
           >
-            <span className="flex w-8 h-8 items-center justify-center rounded-full bg-hover border border-edge text-white text-[13px] font-semibold">
-              {initial}
-            </span>
+            {user.avatarUrl ? (
+              <HeaderAvatar key={user.avatarUrl} url={user.avatarUrl} initial={initial} />
+            ) : (
+              <span className="flex w-8 h-8 items-center justify-center rounded-full bg-hover border border-edge text-white text-[13px] font-semibold">
+                {initial}
+              </span>
+            )}
             <span className="text-[13px] font-medium text-white hidden sm:inline-block">
               {user.displayName}
             </span>

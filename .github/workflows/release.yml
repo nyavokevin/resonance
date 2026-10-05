@@ -1,0 +1,171 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Nécessaire pour publi/les assets du Release et que electron-updater
+# puisse y lire latest.yml / latest-mac.yml.
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Ensures tag matches package.json version
+        # Le tag pushé (ex. v0.1.0) DOIT égaler la version package.json.
+        # electron-builder/updater s'appuient dessus pour nommer les assets
+        # et détecter l'update côté client.
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "package.json version: ${PKG_VERSION}, tag version: ${TAG_VERSION}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${PKG_VERSION}"
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      # `next build` échoue si les variables NEXT_PUBLIC_* sont absentes.
+      # On écrit un .env.local jetable avec des valeurs bidon non vides :
+      # le build CI n'appelle jamais Supabase — seule leur présence compte.
+      - name: Write throwaway .env.local for CI build
+        run: |
+          cat > .env.local <<'EOF'
+          NEXT_PUBLIC_SUPABASE_URL=https://ci-dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-dummy-anon-key
+          NEXT_PUBLIC_MARKET=FR
+          EOF
+
+      - name: Build (Next)
+        run: npm run build
+
+  build-windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+    needs: verify
+    env:
+      # Toutes OPTIONNELLES : non définies, electron-builder saute la
+      # signature (avertissement) et produit un installeur non signé.
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }} # certificat Windows (PFX, base64) — optionnel
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }} # mot de passe du PFX — optionnel
+      CSC_LINK: ${{ secrets.CSC_LINK }} # certificat générique (fallback win/mac) — optionnel
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }} # mot de passe du certificat — optionnel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Write throwaway .env.local for CI build
+        shell: bash
+        run: |
+          cat > .env.local <<'EOF'
+          NEXT_PUBLIC_SUPABASE_URL=https://ci-dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-dummy-anon-key
+          NEXT_PUBLIC_MARKET=FR
+          EOF
+
+      # electron:build lance déjà `next build` — les args -- --win --x64
+      # sont simplement passés à electron-builder à la fin.
+      - name: Build installer (Next + electron-builder)
+        run: npm run electron:build -- --win --x64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: release/
+          if-no-files-found: error
+
+  build-macos:
+    name: Build macOS app
+    runs-on: macos-latest
+    needs: verify
+    env:
+      # Toutes OPTIONNELLES : non définies, builds non signés / non
+      # notariés (avertissements) — l'app s'installe quand même.
+      CSC_LINK: ${{ secrets.CSC_LINK }} # certificat Apple CI (p12) — optionnel
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }} # mot de passe du p12 — optionnel
+      APPLE_ID: ${{ secrets.APPLE_ID }} # Apple ID pour notarisation — optionnel
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }} # mot de passe applicatif — optionnel
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }} # Team ID Apple Developer — optionnel
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Write throwaway .env.local for CI build
+        run: |
+          cat > .env.local <<'EOF'
+          NEXT_PUBLIC_SUPABASE_URL=https://ci-dummy.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=ci-dummy-anon-key
+          NEXT_PUBLIC_MARKET=FR
+          EOF
+
+      - name: Build app (Next + electron-builder, dmg + zip x64/arm64)
+        run: npm run electron:build -- --mac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: release/
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-macos]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List built artifacts
+        run: ls -la artifacts/
+
+      # Les fichiers latest.yml / latest-mac.yml sont générés PAR
+      # electron-builder dans release/ : ils doivent être dans les assets
+      # pour qu'electron-updater détecte la nouvelle version.
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Resonance ${{ github.ref_name }}"
+          body: |
+            Release automatique depuis le tag `${{ github.ref_name }}`.
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/*.exe
+            artifacts/*.dmg
+            artifacts/*.zip
+            artifacts/latest.yml
+            artifacts/latest-mac.yml

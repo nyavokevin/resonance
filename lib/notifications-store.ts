@@ -20,6 +20,8 @@ export interface NotificationPayload {
   conversation_id?: string;
   preview?: string;
   friendship_id?: string;
+  /** Lien direct vers la session (payload enrichi 011+ du trigger). */
+  jam_id?: string;
 }
 
 export interface NotificationRow {
@@ -31,9 +33,12 @@ export interface NotificationRow {
   created_at: string;
 }
 
-/** Deep link par type (partagé TopBar + page /notifications). */
+/** Deep link par type (partagé TopBar + page /notifications).
+ *  jam_invite : renvoie le lien vers la session si dispo (les vieilles
+ *  notifications 007 n'ont pas de jam_id dans le payload → /jam simple,
+ *  l'utilisateur retombe sur restoreJamSession ou l'écran de création). */
 export function notificationTarget(n: NotificationRow): string {
-  const conv = n.payload.conversation_id;
+  const conv = n.payload?.conversation_id;
   switch (n.type) {
     case "message":
       return conv ? `/messages/${conv}` : "/messages";
@@ -42,7 +47,7 @@ export function notificationTarget(n: NotificationRow): string {
     case "friend_accepted":
       return "/friends";
     case "jam_invite":
-      return "/jam";
+      return n.payload?.jam_id ? `/jam/invite/${n.payload.jam_id}` : "/jam";
   }
 }
 
@@ -73,11 +78,12 @@ export function notificationContent(n: NotificationRow): {
   action: { label: string; href: string };
 } {
   const t = dictionaries[useLocaleStore.getState().locale].notifications;
-  const name = n.payload.from_name || "?";
+  const payload = n.payload ?? {};
+  const name = payload.from_name || "?";
   switch (n.type) {
     case "message":
       return {
-        body: fmt(t.newMessage, { name, preview: n.payload.preview ?? "" }),
+        body: fmt(t.newMessage, { name, preview: payload.preview ?? "" }),
         action: { label: t.view, href: notificationTarget(n) },
       };
     case "friend_request":
@@ -134,7 +140,15 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(LIST_LIMIT);
-    if (data) set({ notifications: data as NotificationRow[] });
+    // Durcit à la frontière : payload NULL → {} pour tous les lecteurs aval.
+    if (data) {
+      set({
+        notifications: (data as NotificationRow[]).map((row) => ({
+          ...row,
+          payload: row.payload ?? {},
+        })),
+      });
+    }
     const [convs, received] = await Promise.all([
       listConversations(),
       listReceived(),
@@ -168,11 +182,15 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const row = payload.new as NotificationRow;
+        const incoming = payload.new as NotificationRow;
+        const row: NotificationRow = {
+          ...incoming,
+          payload: incoming.payload ?? {},
+        };
         // Dédoublonne (reconnect StrictMode / double event).
         if (get().notifications.some((n) => n.id === row.id)) return;
         set({ notifications: [row, ...get().notifications].slice(0, LIST_LIMIT) });
-        const convId = row.payload.conversation_id;
+        const convId = row.payload?.conversation_id;
         if (get().openConversationId && convId && convId === get().openConversationId) {
           // Chat ouvert : pas de toast, marqué lu (la ligne serveur existe déjà).
           void get().markRead(row.id);

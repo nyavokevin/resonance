@@ -26,13 +26,45 @@
       "!node_modules/**/*"
     ],
     "asar": false,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "nyavokevin",
+        "repo": "resonance",
+        "releaseType": "release"
+      }
+    ],
     "win": {
-      "target": "nsis",
-      "icon": "electron/icon.ico"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "electron/icon.ico",
+      "artifactName": "Resonance-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "Resonance"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        },
+        {
+          "target": "zip",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "category": "public.app-category.music",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "Resonance-${version}-${arch}.${ext}"
     }
   },
   "dependencies": {
@@ -42,6 +74,8 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "@xhayper/discord-rpc": "^1.5.1",
+    "electron-log": "^5.2.4",
+    "electron-updater": "^6.0.0",
     "lucide-react": "^1.48.0",
     "nanoid": "^5.1.16",
     "next": "16.3.6",

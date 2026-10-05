@@ -87,15 +87,23 @@ function buildActivity({ title, artist, coverUrl, durationMs, positionMs, isPlay
   const safeDur =
     Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : 0;
   const start = now - safePos;
+  // Trim first: a whitespace-only string is truthy, so `||` alone would
+  // let it through — and the fork drops blank `state` (`if
+  // (activity.state)` in ClientUser.setActivity), leaving Discord with a
+  // title but no artist line. `state` is the correct fork field (verified
+  // against @xhayper/discord-rpc 1.5.1 SetActivity).
+  const clean = (v) => (typeof v === "string" ? v.trim() : "");
+  const safeTitle = (clean(title) || "Unknown title").slice(0, 128);
+  const safeArtist = (clean(artist) || "Unknown artist").slice(0, 128);
   const activity = {
     // Listening (type 2) renders "Listening to Resonance" in Discord.
     type: 2,
     name: "Resonance",
-    details: String(title || "Unknown title").slice(0, 128),
-    state: String(artist || "Unknown artist").slice(0, 128),
+    details: safeTitle,
+    state: safeArtist,
     largeImageKey:
       typeof coverUrl === "string" && coverUrl.startsWith("https://") ? coverUrl : "logo",
-    largeImageText: String(title || "Resonance").slice(0, 128),
+    largeImageText: (clean(title) || "Resonance").slice(0, 128),
   };
   if (isPlaying && safeDur > 0) {
     activity.startTimestamp = start;

@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const [{ data: profile }, { count: likedCount }, playlists] = await Promise.all([
     supabase
       .from("profiles")
-      .select("display_name")
+      .select("display_name, avatar_url")
       .eq("id", user.id)
       .maybeSingle(),
     supabase.from("liked_tracks").select("id", { count: "exact", head: true }),
@@ -26,6 +26,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       user={{
         email: user.email ?? "",
         displayName: profile?.display_name ?? user.email?.split("@")[0] ?? "",
+        avatarUrl: profile?.avatar_url ?? undefined,
       }}
       likedCount={likedCount ?? 0}
       playlists={playlists}
