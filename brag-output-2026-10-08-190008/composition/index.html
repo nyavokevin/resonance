@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Resonance — 2016 Launch Brag (Vertical)</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1080px; height: 1920px; overflow: hidden;
+        background: #1e1f22;
+        font-family: 'Inter', system-ui, sans-serif;
+      }
+      #root {
+        position: relative; width: 100%; height: 100%; overflow: hidden;
+        background: #1e1f22;
+      }
+      .scene { width: 100%; height: 100%; position: absolute; inset: 0; }
+      .scene-bg { position: absolute; inset: 0; background: #1e1f22; }
+
+      /* ---- pastel framing blobs (2016-launch graphic layer, additive only) ---- */
+      .blob {
+        position: absolute; border-radius: 50%; filter: blur(2px);
+        opacity: 0; pointer-events: none;
+      }
+
+      /* ---- typography ---- */
+      .display {
+        font-family: 'Inter', system-ui, sans-serif;
+        font-weight: 800; color: #ffffff; letter-spacing: -0.01em;
+      }
+      .caption-wrap {
+        position: absolute; left: 0; right: 0; bottom: 230px;
+        display: flex; flex-direction: column; align-items: center;
+        gap: 8px; padding: 0 70px; text-align: center;
+      }
+      .caption-line {
+        font-family: 'Inter', system-ui, sans-serif;
+        font-weight: 800; font-size: 64px; line-height: 1.08; color: #ffffff;
+        opacity: 0; letter-spacing: -0.01em;
+      }
+      .caption-accent { color: #C9C6FF; }
+
+      /* ---- app chrome recreation ---- */
+      .app-card {
+        position: absolute; left: 90px; right: 90px; top: 430px; bottom: 430px;
+        background: #2b2d31; border: 1px solid #3f4147; border-radius: 28px;
+        overflow: hidden; display: flex; flex-direction: column;
+      }
+      .app-card-inner { position: relative; flex: 1; padding: 36px; }
+      .pill {
+        display: flex; align-items: center; gap: 14px;
+        background: #1e1f22; border: 1px solid #3f4147; border-radius: 16px;
+        height: 76px; padding: 0 24px;
+      }
+      .pill-icon { width: 28px; height: 28px; color: #80848e; flex: none; }
+      .pill-text { font-size: 28px; color: #ffffff; flex: 1; font-family: 'Inter', sans-serif; white-space: nowrap; overflow: hidden; }
+      .pill-text .caret {
+        display: inline-block; width: 3px; height: 30px; background: #5865f2;
+        vertical-align: -6px; margin-left: 2px; opacity: 0;
+      }
+      .badge {
+        font-family: 'Inter', sans-serif; font-weight: 700; font-size: 18px;
+        color: #ffffff; text-transform: uppercase; letter-spacing: 0.04em;
+        border-radius: 8px; padding: 8px 14px; flex: none; opacity: 0;
+      }
+
+      .track-row {
+        display: flex; align-items: center; gap: 20px; margin-top: 28px;
+        background: #313338; border-radius: 16px; padding: 18px 22px; opacity: 0;
+      }
+      .cover { width: 72px; height: 72px; border-radius: 12px; flex: none; background: linear-gradient(135deg,#5865f2,#C9C6FF); }
+      .track-meta { flex: 1; min-width: 0; }
+      .track-title { font-size: 26px; font-weight: 700; color: #ffffff; font-family: 'Inter', sans-serif; }
+      .track-artist { font-size: 20px; color: #b5bac1; font-family: 'Inter', sans-serif; margin-top: 2px; }
+      .play-dot {
+        width: 56px; height: 56px; border-radius: 50%; background: #5865f2;
+        display: flex; align-items: center; justify-content: center; flex: none;
+      }
+
+      .sidebar-header { display: flex; align-items: center; justify-content: space-between; }
+      .sidebar-title { font-size: 22px; font-weight: 700; color: #80848e; text-transform: uppercase; letter-spacing: 0.08em; font-family: 'Inter', sans-serif; }
+      .plus-btn {
+        width: 44px; height: 44px; border-radius: 10px; background: #313338;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .playlist-row {
+        display: flex; align-items: center; gap: 20px; margin-top: 26px;
+        padding: 16px; border-radius: 14px; background: #313338; opacity: 0;
+      }
+      .playlist-cover { width: 64px; height: 64px; border-radius: 10px; flex: none; background: linear-gradient(135deg,#FFD9B8,#FF5500); }
+      .playlist-name { font-size: 26px; font-weight: 700; color: #ffffff; font-family: 'Inter', sans-serif; }
+      .playlist-count {
+        font-family: 'Inter', sans-serif; font-size: 18px; color: #80848e;
+        background: #1e1f22; border-radius: 8px; padding: 6px 12px; flex: none;
+      }
+
+      .toast {
+        position: absolute; left: 36px; right: 36px; bottom: 36px;
+        background: #313338; border: 1px solid #3f4147; border-radius: 16px;
+        padding: 22px 26px; display: flex; align-items: center; gap: 16px; opacity: 0;
+      }
+      .toast-dot { width: 14px; height: 14px; border-radius: 50%; background: #23a55a; flex: none; }
+      .toast-text { font-size: 24px; color: #ffffff; font-family: 'Inter', sans-serif; }
+
+      .tile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; }
+      .tile {
+        height: 180px; border-radius: 18px; padding: 20px;
+        display: flex; flex-direction: column; justify-content: flex-end;
+        position: relative; overflow: hidden; opacity: 0;
+      }
+      .tile-label { font-size: 26px; font-weight: 800; color: #ffffff; font-family: 'Inter', sans-serif; }
+      .tile-play {
+        width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,0.22);
+        display: flex; align-items: center; justify-content: center; margin-bottom: 10px;
+      }
+
+      .friend-row {
+        display: flex; align-items: center; gap: 22px; margin-top: 30px;
+        background: #313338; border-radius: 16px; padding: 20px 24px; opacity: 0;
+      }
+      .avatar {
+        width: 72px; height: 72px; border-radius: 50%; flex: none;
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'Inter', sans-serif; font-weight: 800; font-size: 28px; color: #fff;
+      }
+      .friend-name { font-size: 26px; font-weight: 700; color: #ffffff; font-family: 'Inter', sans-serif; }
+      .friend-status { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+      .online-dot { width: 12px; height: 12px; border-radius: 50%; background: #23a55a; flex: none; }
+      .friend-listening { font-size: 20px; color: #b5bac1; font-family: 'Inter', sans-serif; }
+
+      .jam-code-wrap { text-align: center; margin-top: 10px; }
+      .jam-code-label { font-size: 20px; color: #80848e; text-transform: uppercase; letter-spacing: 0.1em; font-family: 'Inter', sans-serif; }
+      .jam-code {
+        font-family: 'Inter', sans-serif; font-weight: 800; font-size: 76px;
+        color: #ffffff; letter-spacing: 0.06em; margin-top: 6px;
+      }
+      .jam-participants { margin-top: 20px; }
+      .go-live-btn {
+        position: absolute; left: 36px; right: 36px; bottom: 36px;
+        background: #5865f2; border-radius: 16px; height: 68px;
+        display: flex; align-items: center; justify-content: center; gap: 12px;
+        opacity: 0;
+      }
+      .go-live-text { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 22px; color: #fff; text-transform: uppercase; letter-spacing: 0.08em; }
+
+      .chat-list { display: flex; flex-direction: column; gap: 18px; margin-top: 4px; }
+      .chat-bubble { display: flex; align-items: flex-end; gap: 14px; opacity: 0; }
+      .chat-avatar { width: 48px; height: 48px; border-radius: 50%; flex: none; display:flex; align-items:center; justify-content:center; font-family:'Inter', sans-serif; font-weight:800; font-size:18px; color:#fff; }
+      .chat-text {
+        background: #313338; border-radius: 16px; padding: 14px 20px;
+        font-size: 22px; color: #ffffff; font-family: 'Inter', sans-serif; max-width: 560px;
+      }
+      .mini-player {
+        position: absolute; left: 36px; right: 36px; bottom: 36px; height: 100px;
+        background: #1e1f22; border: 1px solid #3f4147; border-radius: 16px;
+        display: flex; align-items: center; gap: 16px; padding: 0 20px;
+      }
+      .mini-cover { width: 60px; height: 60px; border-radius: 10px; flex: none; background: linear-gradient(135deg,#5865f2,#C9C6FF); }
+      .mini-meta { flex: 1; min-width: 0; }
+      .mini-title { font-size: 22px; font-weight: 700; color: #fff; font-family: 'Inter', sans-serif; }
+      .mini-artist { font-size: 18px; color: #80848e; font-family: 'Inter', sans-serif; }
+      .eq-bars { display: flex; align-items: flex-end; gap: 4px; height: 24px; flex: none; }
+      .eq-bar { width: 6px; background: #5865f2; border-radius: 2px; }
+
+      .logo-mark {
+        width: 180px; height: 180px; border-radius: 40px; background: #5865f2;
+        display: flex; align-items: center; justify-content: center; opacity: 0;
+      }
+      .logo-img { width: 108px; height: 108px; object-fit: contain; }
+      .wordmark { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 72px; color: #fff; margin-top: 28px; opacity: 0; text-align: center; }
+      .tagline { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 30px; color: #b5bac1; margin-top: 14px; opacity: 0; text-align: center; }
+      .cta-placeholder {
+        margin-top: 40px; border: 1px dashed #5865f2; border-radius: 14px;
+        padding: 16px 28px; font-family: 'Inter', sans-serif; font-weight: 700;
+        font-size: 22px; color: #C9C6FF; opacity: 0; text-align: center;
+      }
+      .center-col { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+      /* ---- flash-cut overlay (clap-hit stand-in) ---- */
+      #flash-overlay {
+        position: absolute; inset: 0; z-index: 500; pointer-events: none;
+        background: #C9C6FF; opacity: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="39"
+      data-width="1080"
+      data-height="1920"
+    >
+      <!-- ============ SCENE 1 — HOOK — 0 - 3.0s ============ -->
+      <section id="s1" class="scene clip" data-start="0" data-duration="3.0">
+        <div class="scene-bg"></div>
+        <div class="blob" id="s1-blob-a" style="width:420px;height:420px;left:-140px;top:160px;background:#C9C6FF;"></div>
+        <div class="blob" id="s1-blob-b" style="width:360px;height:360px;right:-120px;bottom:260px;background:#BFEFE0;"></div>
+        <div class="caption-wrap" style="bottom: 50%; transform: translateY(50%);">
+          <div class="caption-line" id="s1-l1">Listen free.</div>
+          <div class="caption-line caption-accent" id="s1-l2">Like Spotify.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 2 — ANNOUNCE — 3.0 - 5.5s ============ -->
+      <section id="s2" class="scene clip" data-start="3.0" data-duration="2.5">
+        <div class="scene-bg"></div>
+        <div class="blob" id="s2-blob" style="width:500px;height:500px;left:50%;top:40%;margin-left:-250px;margin-top:-250px;background:#FFD9B8;"></div>
+        <div class="center-col">
+          <div class="logo-mark" id="s2-logo">
+            <img class="logo-img" src="assets/img/logo.png" alt="" />
+          </div>
+          <div class="wordmark" id="s2-line1" style="font-size:36px;color:#b5bac1;">We're thrilled to announce</div>
+          <div class="wordmark" id="s2-line2">Resonance.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 3 — PASTE ANY LINK — 5.5 - 9.0s ============ -->
+      <section id="s3" class="scene clip" data-start="5.5" data-duration="3.5">
+        <div class="scene-bg"></div>
+        <div class="app-card" id="s3-card">
+          <div class="app-card-inner">
+            <div class="pill">
+              <svg class="pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 1 0-7.07-7.07L11.5 4.5"/><path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 1 0 7.07 7.07L12.5 19.5"/></svg>
+              <div class="pill-text" id="s3-typed"><span class="caret" id="s3-caret"></span></div>
+            </div>
+            <div id="s3-badge" class="badge" style="margin-top:18px;background:#313338;border:1px solid #3f4147;display:inline-block;">AUTO-DETECT</div>
+            <div class="track-row" id="s3-track">
+              <div class="cover"></div>
+              <div class="track-meta">
+                <div class="track-title">Padam Padam</div>
+                <div class="track-artist">Kylie Minogue</div>
+              </div>
+              <div class="play-dot">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption-wrap">
+          <div class="caption-line" id="s3-cap">Paste any link. It plays.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 4 — PLAYLISTS — 9.0 - 12.5s ============ -->
+      <section id="s4" class="scene clip" data-start="9.0" data-duration="3.5">
+        <div class="scene-bg"></div>
+        <div class="app-card" id="s4-card">
+          <div class="app-card-inner">
+            <div class="sidebar-header">
+              <div class="sidebar-title">Playlists</div>
+              <div class="plus-btn" id="s4-plus">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+              </div>
+            </div>
+            <div class="playlist-row" id="s4-row">
+              <div class="playlist-cover"></div>
+              <div style="flex:1;min-width:0;">
+                <div class="playlist-name">Radical Optimism (Extended Versions)</div>
+              </div>
+              <div class="playlist-count" id="s4-count">12</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption-wrap">
+          <div class="caption-line" id="s4-cap">Build playlists. Keep them.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 5 — DOWNLOAD — 12.5 - 16.0s ============ -->
+      <section id="s5" class="scene clip" data-start="12.5" data-duration="3.5">
+        <div class="scene-bg"></div>
+        <div class="app-card" id="s5-card">
+          <div class="app-card-inner">
+            <div class="pill" style="justify-content:space-between;">
+              <div class="pill-text" style="flex:none;">Padam Padam — Kylie Minogue</div>
+              <div id="s5-dl-btn" style="width:48px;height:48px;border-radius:10px;background:#313338;display:flex;align-items:center;justify-content:center;flex:none;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#b5bac1" stroke-width="2"><path d="M12 3v12m0 0-5-5m5 5 5-5"/><path d="M4 19h16"/></svg>
+              </div>
+            </div>
+            <div class="toast" id="s5-toast">
+              <div class="toast-dot"></div>
+              <div class="toast-text">Saved — play it anytime, even offline</div>
+            </div>
+          </div>
+        </div>
+        <div class="caption-wrap">
+          <div class="caption-line" id="s5-cap">Download. Take it anywhere.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 6 — DISCOVER — 16.0 - 19.5s ============ -->
+      <section id="s6" class="scene clip" data-start="16.0" data-duration="3.5">
+        <div class="scene-bg"></div>
+        <div class="app-card" id="s6-card">
+          <div class="app-card-inner">
+            <div class="sidebar-title">Mix by genre</div>
+            <div class="tile-grid">
+              <div class="tile" id="s6-tile1" style="background:#4A3A6A;">
+                <div class="tile-play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+                <div class="tile-label">Pop Mix</div>
+              </div>
+              <div class="tile" id="s6-tile2" style="background:#6A3A4A;">
+                <div class="tile-play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+                <div class="tile-label">Rock Mix</div>
+              </div>
+              <div class="tile" id="s6-tile3" style="background:#3A6A4E;">
+                <div class="tile-play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+                <div class="tile-label">Hip-Hop Mix</div>
+              </div>
+              <div class="tile" id="s6-tile4" style="background:#3E4A6B;">
+                <div class="tile-play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg></div>
+                <div class="tile-label">Jazz Mix</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption-wrap">
+          <div class="caption-line" id="s6-cap">One-click genre mixes.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 7 — FRIENDS — 19.5 - 23.0s ============ -->
+      <section id="s7" class="scene clip" data-start="19.5" data-duration="3.5">
+        <div class="scene-bg"></div>
+        <div class="app-card" id="s7-card">
+          <div class="app-card-inner">
+            <div class="sidebar-title">Friends</div>
+            <div class="friend-row" id="s7-row1">
+              <div class="avatar" style="background:#5865f2;">M</div>
+              <div style="flex:1;">
+                <div class="friend-name">Maya</div>
+                <div class="friend-status"><div class="online-dot"></div><div class="friend-listening">Now listening: Flowers — Miley Cyrus</div></div>
+              </div>
+            </div>
+            <div class="friend-row" id="s7-row2">
+              <div class="avatar" style="background:#E8618C;">J</div>
+              <div style="flex:1;">
+                <div class="friend-name">Jordan</div>
+                <div class="friend-status"><div class="online-dot"></div><div class="friend-listening">Now listening: As It Was — Harry Styles</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption-wrap">
+          <div class="caption-line" id="s7-cap">See what friends are playing.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 8 — JAM — 23.0 - 27.0s ============ -->
+      <section id="s8" class="scene clip" data-start="23.0" data-duration="4.0">
+        <div class="scene-bg"></div>
+        <div class="app-card" id="s8-card">
+          <div class="app-card-inner">
+            <div class="jam-code-wrap">
+              <div class="jam-code-label">Jam Code</div>
+              <div class="jam-code" id="s8-code">KX7Q2M</div>
+            </div>
+            <div class="jam-participants">
+              <div class="friend-row" id="s8-p1" style="margin-top:22px;">
+                <div class="avatar" style="background:#5865f2;">M</div>
+                <div style="flex:1;"><div class="friend-name">Maya</div><div class="friend-status"><div class="online-dot"></div><div class="friend-listening">joined the Jam</div></div></div>
+              </div>
+              <div class="friend-row" id="s8-p2">
+                <div class="avatar" style="background:#E8618C;">J</div>
+                <div style="flex:1;"><div class="friend-name">Jordan</div><div class="friend-status"><div class="online-dot"></div><div class="friend-listening">joined the Jam</div></div></div>
+              </div>
+              <div class="friend-row" id="s8-p3">
+                <div class="avatar" style="background:#23a55a;">S</div>
+                <div style="flex:1;"><div class="friend-name">Sam</div><div class="friend-status"><div class="online-dot"></div><div class="friend-listening">joined the Jam</div></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="go-live-btn" id="s8-golive">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>
+            <div class="go-live-text">Go Live</div>
+          </div>
+        </div>
+        <div class="caption-wrap" style="bottom:280px;">
+          <div class="caption-line" id="s8-cap">Launch a Jam. No limit.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 9 — CHAT — 27.0 - 30.5s ============ -->
+      <section id="s9" class="scene clip" data-start="27.0" data-duration="3.5">
+        <div class="scene-bg"></div>
+        <div class="app-card" id="s9-card">
+          <div class="app-card-inner">
+            <div class="sidebar-title">Jam Chat</div>
+            <div class="chat-list">
+              <div class="chat-bubble" id="s9-b1">
+                <div class="chat-avatar" style="background:#5865f2;">M</div>
+                <div class="chat-text">this song!! 🔥</div>
+              </div>
+              <div class="chat-bubble" id="s9-b2">
+                <div class="chat-avatar" style="background:#E8618C;">J</div>
+                <div class="chat-text">adding one to the queue</div>
+              </div>
+              <div class="chat-bubble" id="s9-b3">
+                <div class="chat-avatar" style="background:#23a55a;">S</div>
+                <div class="chat-text">let's gooo</div>
+              </div>
+            </div>
+          </div>
+          <div class="mini-player" id="s9-player">
+            <div class="mini-cover"></div>
+            <div class="mini-meta">
+              <div class="mini-title">Padam Padam</div>
+              <div class="mini-artist">Kylie Minogue</div>
+            </div>
+            <div class="eq-bars">
+              <div class="eq-bar" id="s9-eq1" style="height:8px;"></div>
+              <div class="eq-bar" id="s9-eq2" style="height:16px;"></div>
+              <div class="eq-bar" id="s9-eq3" style="height:10px;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption-wrap" style="bottom:280px;">
+          <div class="caption-line" id="s9-cap">Chat while the music plays.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 10 — CLOSING — 30.5 - 35.0s ============ -->
+      <section id="s10" class="scene clip" data-start="30.5" data-duration="4.5">
+        <div class="scene-bg"></div>
+        <div class="center-col">
+          <div class="caption-line" id="s10-l1" style="font-size:52px;">Music was never meant</div>
+          <div class="caption-line" id="s10-l2" style="font-size:52px;margin-top:6px;">to be listened to alone.</div>
+        </div>
+      </section>
+
+      <!-- ============ SCENE 11 — END CARD — 35.0 - 39.0s ============ -->
+      <section id="s11" class="scene clip" data-start="35.0" data-duration="4.0">
+        <div class="scene-bg"></div>
+        <div class="center-col">
+          <div class="logo-mark" id="s11-logo">
+            <img class="logo-img" src="assets/img/logo.png" alt="" />
+          </div>
+          <div class="wordmark" id="s11-word">Resonance</div>
+          <div class="tagline" id="s11-tag">Listen together. For free.</div>
+          <div class="cta-placeholder" id="s11-cta">Download — coming soon</div>
+        </div>
+      </section>
+
+      <!-- flash-cut overlay (clap-hit stand-in), not a clip: always mounted, decorative -->
+      <div id="flash-overlay"></div>
+
+      <!-- ============ AUDIO ============ -->
+      <audio
+        id="music"
+        src="assets/music/happy-beats-business-moves-vol-1-by-ende-dot-app.mp3"
+        data-start="0"
+        data-duration="39"
+        data-track-index="20"
+        data-volume="1"
+        data-automation="{&quot;version&quot;:1,&quot;lanes&quot;:[{&quot;target&quot;:&quot;volume&quot;,&quot;points&quot;:[{&quot;t&quot;:0,&quot;v&quot;:0},{&quot;t&quot;:0.6,&quot;v&quot;:0.28},{&quot;t&quot;:37.6,&quot;v&quot;:0.28},{&quot;t&quot;:39,&quot;v&quot;:0}]}]}"
+      ></audio>
+
+      <!-- transition hits (clap stand-in) -->
+      <audio id="hit-1" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="2.95" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="hit-2" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="5.45" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="hit-3" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="8.95" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="hit-4" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="12.45" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="hit-5" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="15.95" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="hit-6" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="19.45" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="hit-7" src="assets/sfx/impact/impactSoft_medium_000.ogg" data-start="22.95" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="hit-8" src="assets/sfx/impact/impactSoft_medium_001.ogg" data-start="26.95" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+      <audio id="hit-9" src="assets/sfx/impact/impactSoft_medium_002.ogg" data-start="30.45" data-duration="0.5" data-track-index="21" data-volume="0.75"></audio>
+
+      <!-- scene SFX -->
+      <audio id="sfx-announce-bell" src="assets/sfx/interface/bong_001.ogg" data-start="3.4" data-duration="1.2" data-track-index="22" data-volume="0.7"></audio>
+
+      <audio id="sfx-type-1" src="assets/sfx/keyboard/keypress-001.wav" data-start="6.0" data-duration="0.2" data-track-index="22" data-volume="0.6"></audio>
+      <audio id="sfx-type-2" src="assets/sfx/keyboard/keypress-004.wav" data-start="6.13" data-duration="0.2" data-track-index="23" data-volume="0.6"></audio>
+      <audio id="sfx-type-3" src="assets/sfx/keyboard/keypress-009.wav" data-start="6.26" data-duration="0.2" data-track-index="22" data-volume="0.6"></audio>
+      <audio id="sfx-type-4" src="assets/sfx/keyboard/keypress-013.wav" data-start="6.39" data-duration="0.2" data-track-index="23" data-volume="0.6"></audio>
+      <audio id="sfx-type-5" src="assets/sfx/keyboard/keypress-017.wav" data-start="6.52" data-duration="0.2" data-track-index="22" data-volume="0.6"></audio>
+      <audio id="sfx-type-6" src="assets/sfx/keyboard/keypress-022.wav" data-start="6.65" data-duration="0.2" data-track-index="23" data-volume="0.6"></audio>
+      <audio id="sfx-badge-drop" src="assets/sfx/interface/drop_001.ogg" data-start="7.0" data-duration="0.6" data-track-index="22" data-volume="0.7"></audio>
+      <audio id="sfx-track-drop" src="assets/sfx/interface/drop_002.ogg" data-start="7.6" data-duration="0.6" data-track-index="22" data-volume="0.7"></audio>
+
+      <audio id="sfx-playlist-card" src="assets/sfx/casino/card-place-1.ogg" data-start="10.0" data-duration="0.6" data-track-index="22" data-volume="0.75"></audio>
+      <audio id="sfx-playlist-click" src="assets/sfx/interface/click_001.ogg" data-start="10.5" data-duration="0.4" data-track-index="23" data-volume="0.6"></audio>
+
+      <audio id="sfx-dl-click" src="assets/sfx/interface/click_003.ogg" data-start="13.6" data-duration="0.4" data-track-index="22" data-volume="0.7"></audio>
+      <audio id="sfx-dl-toast" src="assets/sfx/interface/drop_001.ogg" data-start="13.9" data-duration="0.6" data-track-index="23" data-volume="0.7"></audio>
+
+      <!-- beat-locked: Discover tile pops at 16.02 / 17.02 / 17.52 / 18.02 (documented strong cues) -->
+      <audio id="sfx-tile-1" src="assets/sfx/casino/card-place-1.ogg" data-start="16.02" data-duration="0.6" data-track-index="22" data-volume="0.75"></audio>
+      <audio id="sfx-tile-2" src="assets/sfx/casino/card-place-2.ogg" data-start="17.02" data-duration="0.6" data-track-index="23" data-volume="0.75"></audio>
+      <audio id="sfx-tile-3" src="assets/sfx/casino/card-place-3.ogg" data-start="17.52" data-duration="0.6" data-track-index="22" data-volume="0.75"></audio>
+      <audio id="sfx-tile-4" src="assets/sfx/casino/card-place-1.ogg" data-start="18.02" data-duration="0.6" data-track-index="23" data-volume="0.75"></audio>
+
+      <!-- beat-grid: Friends rows at 20.02 / 21.01 (documented strong cues) -->
+      <audio id="sfx-friend-1" src="assets/sfx/interface/drop_002.ogg" data-start="20.02" data-duration="0.6" data-track-index="22" data-volume="0.7"></audio>
+      <audio id="sfx-friend-2" src="assets/sfx/interface/drop_002.ogg" data-start="21.01" data-duration="0.6" data-track-index="22" data-volume="0.7"></audio>
+
+      <audio id="sfx-jam-code" src="assets/sfx/interface/select_008.ogg" data-start="23.3" data-duration="0.5" data-track-index="22" data-volume="0.75"></audio>
+      <audio id="sfx-jam-p1" src="assets/sfx/casino/card-place-1.ogg" data-start="24.0" data-duration="0.5" data-track-index="22" data-volume="0.7"></audio>
+      <audio id="sfx-jam-p2" src="assets/sfx/casino/card-place-2.ogg" data-start="24.35" data-duration="0.5" data-track-index="23" data-volume="0.7"></audio>
+      <audio id="sfx-jam-p3" src="assets/sfx/casino/card-place-3.ogg" data-start="24.7" data-duration="0.5" data-track-index="22" data-volume="0.7"></audio>
+      <audio id="sfx-golive" src="assets/sfx/interface/select_008.ogg" data-start="25.6" data-duration="0.5" data-track-index="22" data-volume="0.75"></audio>
+
+      <audio id="sfx-chat-1" src="assets/sfx/interface/drop_001.ogg" data-start="27.5" data-duration="0.5" data-track-index="22" data-volume="0.65"></audio>
+      <audio id="sfx-chat-2" src="assets/sfx/interface/drop_002.ogg" data-start="28.1" data-duration="0.5" data-track-index="23" data-volume="0.65"></audio>
+      <audio id="sfx-chat-3" src="assets/sfx/interface/drop_001.ogg" data-start="28.7" data-duration="0.5" data-track-index="22" data-volume="0.65"></audio>
+
+      <audio id="sfx-final-bell" src="assets/sfx/interface/bong_001.ogg" data-start="35.3" data-duration="1.2" data-track-index="22" data-volume="0.75"></audio>
+    </div>
+
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      function flashAt(t) {
+        tl.to('#flash-overlay', { opacity: 0.5, duration: 0.05, ease: 'none' }, t - 0.05);
+        tl.to('#flash-overlay', { opacity: 0, duration: 0.12, ease: 'none' }, t + 0.0);
+      }
+      [3.0, 5.5, 9.0, 12.5, 16.0, 19.5, 23.0, 27.0, 30.5].forEach(flashAt);
+
+      /* ---------- Scene 1: Hook (0 - 3.0) ---------- */
+      tl.fromTo('#s1-blob-a', { opacity: 0, scale: 0.7 }, { opacity: 0.55, scale: 1, duration: 0.6, ease: 'power2.out' }, 0.0);
+      tl.fromTo('#s1-blob-b', { opacity: 0, scale: 0.7 }, { opacity: 0.5, scale: 1, duration: 0.6, ease: 'power2.out' }, 0.1);
+      tl.fromTo('#s1-l1', { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.6)' }, 0.15);
+      tl.fromTo('#s1-l2', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, 0.55);
+      tl.to('#s1-l1', { opacity: 0, duration: 0.25 }, 2.7);
+      tl.to('#s1-l2', { opacity: 0, duration: 0.25 }, 2.7);
+      tl.to('#s1-blob-a', { opacity: 0, duration: 0.25 }, 2.7);
+      tl.to('#s1-blob-b', { opacity: 0, duration: 0.25 }, 2.7);
+
+      /* ---------- Scene 2: Announce (3.0 - 5.5) ---------- */
+      tl.fromTo('#s2-blob', { opacity: 0, scale: 0.6 }, { opacity: 0.35, scale: 1, duration: 0.6, ease: 'power2.out' }, 3.0);
+      tl.fromTo('#s2-logo', { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(2)' }, 3.05); // beat-locked: 3.4s bell pairs with logo settle
+      tl.fromTo('#s2-line1', { opacity: 0 }, { opacity: 1, duration: 0.3 }, 3.55);
+      tl.fromTo('#s2-line2', { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' }, 3.95);
+      tl.to('#s2-logo,#s2-line1,#s2-line2,#s2-blob', { opacity: 0, duration: 0.2 }, 5.2);
+
+      /* ---------- Scene 3: Paste any link (5.5 - 9.0) ---------- */
+      const s3Text = 'spotify.com/abcd12';
+      tl.set('#s3-caret', { opacity: 1 }, 6.0);
+      for (let i = 1; i <= s3Text.length; i++) {
+        const t = 6.0 + (i - 1) * 0.13;
+        tl.set('#s3-typed', { innerHTML: s3Text.slice(0, i) + '<span class="caret" id="s3-caret"></span>' }, t);
+      }
+      tl.to('#s3-badge', { opacity: 1, backgroundColor: '#1DB954', borderColor: '#1DB954', duration: 0.2 }, 7.0); // beat: badge-drop sfx at 7.0
+      tl.fromTo('#s3-track', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' }, 7.6);
+      tl.fromTo('#s3-card', { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out' }, 5.55);
+      tl.fromTo('#s3-cap', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 5.8);
+      tl.to('#s3-card,#s3-cap', { opacity: 0, duration: 0.2 }, 8.75);
+
+      /* ---------- Scene 4: Playlists (9.0 - 12.5) ---------- */
+      tl.fromTo('#s4-card', { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out' }, 9.05);
+      tl.fromTo('#s4-cap', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 9.3);
+      tl.fromTo('#s4-plus', { scale: 1 }, { scale: 1.15, duration: 0.15, yoyo: true, repeat: 1 }, 9.8);
+      tl.fromTo('#s4-row', { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, ease: 'back.out(1.4)' }, 10.0); // beat: playlist-card sfx at 10.0
+      tl.fromTo('#s4-count', { opacity: 0 }, { opacity: 1, duration: 0.25 }, 10.5);
+      tl.to('#s4-card,#s4-cap', { opacity: 0, duration: 0.2 }, 12.25);
+
+      /* ---------- Scene 5: Download (12.5 - 16.0) ---------- */
+      tl.fromTo('#s5-card', { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out' }, 12.55);
+      tl.fromTo('#s5-cap', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 12.8);
+      tl.fromTo('#s5-dl-btn', { scale: 1 }, { scale: 0.85, duration: 0.12, yoyo: true, repeat: 1, backgroundColor: '#5865f2' }, 13.6); // beat: dl-click sfx at 13.6
+      tl.fromTo('#s5-toast', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.35, ease: 'power3.out' }, 13.9);
+      tl.to('#s5-card,#s5-cap', { opacity: 0, duration: 0.2 }, 15.75);
+
+      /* ---------- Scene 6: Discover (16.0 - 19.5) ---------- */
+      tl.fromTo('#s6-card', { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out' }, 16.05);
+      tl.fromTo('#s6-cap', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 16.2);
+      // beat-locked tile pops: 16.02, 17.02, 17.52, 18.02 (documented strongCues)
+      tl.fromTo('#s6-tile1', { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.8)' }, 16.02);
+      tl.fromTo('#s6-tile2', { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.8)' }, 17.02);
+      tl.fromTo('#s6-tile3', { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.8)' }, 17.52);
+      tl.fromTo('#s6-tile4', { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.8)' }, 18.02);
+      tl.to('#s6-card,#s6-cap', { opacity: 0, duration: 0.2 }, 19.25);
+
+      /* ---------- Scene 7: Friends (19.5 - 23.0) ---------- */
+      tl.fromTo('#s7-card', { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out' }, 19.55);
+      tl.fromTo('#s7-cap', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 19.7);
+      // beat-grid: row arrivals at 20.02 / 21.01 (documented strongCues)
+      tl.fromTo('#s7-row1', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.35, ease: 'power3.out' }, 20.02);
+      tl.fromTo('#s7-row2', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.35, ease: 'power3.out' }, 21.01);
+      tl.to('#s7-card,#s7-cap', { opacity: 0, duration: 0.2 }, 22.75);
+
+      /* ---------- Scene 8: Jam (23.0 - 27.0) ---------- */
+      tl.fromTo('#s8-card', { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out' }, 23.05);
+      tl.fromTo('#s8-cap', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 23.2);
+      tl.fromTo('#s8-code', { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.6)' }, 23.3);
+      tl.fromTo('#s8-p1', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: 'power3.out' }, 24.0);
+      tl.fromTo('#s8-p2', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: 'power3.out' }, 24.35);
+      tl.fromTo('#s8-p3', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: 'power3.out' }, 24.7);
+      tl.fromTo('#s8-golive', { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.25, ease: 'back.out(1.6)' }, 25.6);
+      tl.to('#s8-golive', { scale: 1.06, duration: 0.3, yoyo: true, repeat: 3, ease: 'sine.inOut' }, 25.9);
+      tl.to('#s8-card,#s8-cap,#s8-golive', { opacity: 0, duration: 0.2 }, 26.75);
+
+      /* ---------- Scene 9: Chat (27.0 - 30.5) ---------- */
+      tl.fromTo('#s9-card', { opacity: 0, scale: 0.97 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power3.out' }, 27.05);
+      tl.fromTo('#s9-cap', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 27.2);
+      tl.fromTo('#s9-b1', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 27.5);
+      tl.fromTo('#s9-b2', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 28.1);
+      tl.fromTo('#s9-b3', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, 28.7);
+      tl.fromTo('#s9-player', { opacity: 0 }, { opacity: 1, duration: 0.3 }, 27.1);
+      [['#s9-eq1', 8, 20], ['#s9-eq2', 16, 6], ['#s9-eq3', 10, 22]].forEach(([sel, a, b], i) => {
+        tl.to(sel, { height: b, duration: 0.28, yoyo: true, repeat: 10, ease: 'sine.inOut' }, 27.1 + i * 0.05);
+      });
+      tl.to('#s9-card,#s9-cap,#s9-player', { opacity: 0, duration: 0.2 }, 30.25);
+
+      /* ---------- Scene 10: Closing (30.5 - 35.0) ---------- */
+      tl.fromTo('#s10-l1', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' }, 30.65);
+      tl.fromTo('#s10-l2', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' }, 31.25);
+      tl.to('#s10-l1,#s10-l2', { opacity: 0, duration: 0.35 }, 34.5);
+
+      /* ---------- Scene 11: End card (35.0 - 39.0) ---------- */
+      tl.fromTo('#s11-logo', { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out(1.6)' }, 35.1); // beat-locked: final bell at 35.3
+      tl.fromTo('#s11-word', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35 }, 35.5);
+      tl.fromTo('#s11-tag', { opacity: 0 }, { opacity: 1, duration: 0.35 }, 35.9);
+      tl.fromTo('#s11-cta', { opacity: 0 }, { opacity: 1, duration: 0.35 }, 36.3);
+      tl.to('#root', { backgroundColor: '#000000', duration: 0.4 }, 38.6);
+
+      window.__timelines['main'] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
